@@ -20,6 +20,7 @@ export default function App() {
   const [showGrowthCenter, setShowGrowthCenter] = useState(false)
   const [growthInfo, setGrowthInfo] = useState(null)
   const [practiceSection, setPracticeSection] = useState(null)
+  const [recordChecks, setRecordChecks] = useState(null)
 
   const playerStore = usePlayerStore()
 
@@ -36,6 +37,7 @@ export default function App() {
       newAchievements: growthResult.newAchievements,
       newTitles: growthResult.newTitles
     })
+    setRecordChecks(growthResult.recordChecks)
     setGameResult(result)
     setScreen('result')
   }
@@ -47,6 +49,7 @@ export default function App() {
     setIsEditingMode(false)
     setEditingTrack(null)
     setPracticeSection(null)
+    setRecordChecks(null)
     setScreen('select')
     playerStore.clearNewlyUnlocked()
   }
@@ -178,6 +181,11 @@ export default function App() {
           }}
           growthInfo={growthInfo}
           playerData={playerStore.playerData}
+          recordChecks={recordChecks}
+          trackLeaderboard={playerStore.getTrackLeaderboard(selectedTrack.id, selectedTrack.difficulty)}
+          trackHistory={playerStore.getTrackHistory(selectedTrack.id, selectedTrack.difficulty)}
+          bestRecord={playerStore.getBestRecord(selectedTrack.id, selectedTrack.difficulty)}
+          difficultyLeaderboard={playerStore.getDifficultyLeaderboard(selectedTrack.difficulty)}
         />
       )}
       {showGrowthCenter && (
