@@ -6,6 +6,8 @@ const CALIBRATION_TAPS = 10
 const BEAT_INTERVAL = 0.5
 const OFFSET_RANGE = 100
 const OFFSET_STEP = 1
+const KEYBOARD_BPM = 120
+const KEYBOARD_TAPS = 20
 
 export default function CalibrationCenter({ keyConfig, onClose }) {
   const {
@@ -33,6 +35,11 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
   const [keyEvents, setKeyEvents] = useState([])
   const [keyPressed, setKeyPressed] = useState({})
   const [keyDetecting, setKeyDetecting] = useState(false)
+  const [keyBeatState, setKeyBeatState] = useState('idle')
+  const [keyBeatCount, setKeyBeatCount] = useState(0)
+  const [keyTapCount, setKeyTapCount] = useState(0)
+  const [keyTapResults, setKeyTapResults] = useState([])
+  const [keyBeatFlash, setKeyBeatFlash] = useState(false)
 
   const [judgmentOffsetLocal, setJudgmentOffsetLocal] = useState(calibration.judgmentOffset)
   const [audioOffsetLocal, setAudioOffsetLocal] = useState(calibration.audioOffset)
@@ -42,6 +49,8 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
   const avStartRef = useRef(null)
   const keyDetectRef = useRef(null)
   const keyEventsRef = useRef([])
+  const keyBeatTimerRef = useRef(null)
+  const keyBeatTimesRef = useRef([])
   const synthRef = useRef(null)
   const lastFrameRef = useRef(0)
   const animRef = useRef(null)
@@ -163,31 +172,78 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
     })
   }, [avTapResults, setAudioOffset, addCalibrationResult])
 
-  const startKeyDetection = useCallback(() => {
-    setKeyDetecting(true)
+  const startKeyDetection = useCallback(async () => {
+    try {
+      await Tone.start()
+      if (!synthRef.current) {
+        synthRef.current = new Tone.MembraneSynth({
+          pitchDecay: 0.01,
+          octaves: 4,
+          envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 },
+          volume: -12
+        }).toDestination()
+      }
+    } catch (e) {
+      console.error('Audio init failed:', e)
+      return
+    }
+
+    setKeyBeatState('countdown')
+    setKeyTapCount(0)
+    setKeyTapResults([])
     setKeyEvents([])
     keyEventsRef.current = []
+    keyBeatTimesRef.current = []
     clearKeyLatencies()
 
-    const startTime = performance.now()
+    await new Promise(r => setTimeout(r, 1000))
 
-    const draw = () => {
+    const beatIntervalSec = 60 / KEYBOARD_BPM
+    const startTime = performance.now()
+    let beatIndex = 0
+
+    setKeyBeatState('running')
+    setKeyBeatCount(0)
+    setKeyDetecting(true)
+
+    const tick = () => {
       const now = performance.now()
-      if (now - lastFrameRef.current > 16) {
-        lastFrameRef.current = now
-        setKeyEvents([...keyEventsRef.current])
+      const elapsed = (now - startTime) / 1000
+      const nextBeatTime = beatIndex * beatIntervalSec
+
+      if (elapsed >= nextBeatTime) {
+        try {
+          synthRef.current.triggerAttackRelease('C4', '16n', Tone.now(), 0.6)
+        } catch (e) {}
+
+        keyBeatTimesRef.current.push(now)
+        setKeyBeatFlash(true)
+        setKeyBeatCount(beatIndex + 1)
+        setTimeout(() => setKeyBeatFlash(false), 80)
+
+        beatIndex++
       }
-      keyDetectRef.current = requestAnimationFrame(draw)
+
+      if (beatIndex < KEYBOARD_TAPS + 4) {
+        keyBeatTimerRef.current = requestAnimationFrame(tick)
+      } else {
+        setKeyBeatState('done')
+        setKeyDetecting(false)
+      }
     }
-    keyDetectRef.current = requestAnimationFrame(draw)
+
+    keyBeatTimerRef.current = requestAnimationFrame(tick)
   }, [clearKeyLatencies])
 
   const stopKeyDetection = useCallback(() => {
-    setKeyDetecting(false)
-    if (keyDetectRef.current) {
-      cancelAnimationFrame(keyDetectRef.current)
-      keyDetectRef.current = null
+    if (keyBeatTimerRef.current) {
+      cancelAnimationFrame(keyBeatTimerRef.current)
+      keyBeatTimerRef.current = null
     }
+    setKeyBeatState('idle')
+    setKeyBeatCount(0)
+    setKeyTapCount(0)
+    setKeyDetecting(false)
   }, [])
 
   useEffect(() => {
@@ -201,10 +257,21 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
 
       if (activeTab === 'keyboard' && keyDetecting) {
         const now = performance.now()
-        const latency = Math.round(now - now + Math.random() * 2)
 
         setKeyPressed(prev => ({ ...prev, [e.code]: now }))
-        addKeyLatency(latency)
+
+        let closestDiff = Infinity
+        let closestBeatIndex = -1
+        for (let i = 0; i < keyBeatTimesRef.current.length; i++) {
+          const diff = now - keyBeatTimesRef.current[i]
+          if (Math.abs(diff) < Math.abs(closestDiff)) {
+            closestDiff = diff
+            closestBeatIndex = i
+          }
+        }
+
+        const deviationMs = Math.round(closestDiff)
+        addKeyLatency(Math.abs(deviationMs))
 
         const laneIndex = keyConfig.lanes.indexOf(e.code)
         const label = laneIndex >= 0 ? keyConfig.labels[laneIndex] : e.key.toUpperCase()
@@ -214,10 +281,17 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
           label,
           lane: laneIndex,
           timestamp: now,
-          latency,
+          deviation: deviationMs,
+          beatIndex: closestBeatIndex,
           type: 'down'
         }
         keyEventsRef.current = [event, ...keyEventsRef.current].slice(0, 100)
+        setKeyEvents([...keyEventsRef.current])
+
+        if (closestBeatIndex >= 0 && closestBeatIndex >= keyTapCount) {
+          setKeyTapCount(prev => prev + 1)
+          setKeyTapResults(prev => [...prev, deviationMs])
+        }
       }
     }
 
@@ -249,11 +323,12 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [activeTab, avState, keyDetecting, keyConfig, handleAvTap, addKeyLatency])
+  }, [activeTab, avState, keyDetecting, keyConfig, keyTapCount, handleAvTap, addKeyLatency])
 
   useEffect(() => {
     return () => {
       if (avTimerRef.current) cancelAnimationFrame(avTimerRef.current)
+      if (keyBeatTimerRef.current) cancelAnimationFrame(keyBeatTimerRef.current)
       if (keyDetectRef.current) cancelAnimationFrame(keyDetectRef.current)
       if (animRef.current) cancelAnimationFrame(animRef.current)
       try {
@@ -279,6 +354,10 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
     setAvCalculatedOffset(null)
     setAvState('idle')
     setAvTapCount(0)
+    setKeyTapResults([])
+    setKeyBeatState('idle')
+    setKeyTapCount(0)
+    setKeyEvents([])
   }, [resetCalibration])
 
   const renderAvSyncTab = () => (
@@ -427,78 +506,210 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
 
   const renderKeyboardTab = () => {
     const avgLatency = getAverageKeyLatency()
-    const recentEvents = keyEvents.slice(0, 20)
+
+    let stdDev = 0
+    let minDev = 0
+    let maxDev = 0
+    let avgDev = 0
+    let earlyCount = 0
+    let lateCount = 0
+
+    if (keyTapResults.length > 0) {
+      avgDev = keyTapResults.reduce((a, b) => a + b, 0) / keyTapResults.length
+      const variance = keyTapResults.reduce((sum, val) => sum + Math.pow(val - avgDev, 2), 0) / keyTapResults.length
+      stdDev = Math.sqrt(variance)
+      minDev = Math.min(...keyTapResults)
+      maxDev = Math.max(...keyTapResults)
+      earlyCount = keyTapResults.filter(v => v < 0).length
+      lateCount = keyTapResults.filter(v => v > 0).length
+    }
+
+    const recentEvents = keyEvents.slice(0, 15)
 
     return (
       <div style={styles.tabContent}>
-        <div style={styles.keyVisualArea}>
-          <div style={styles.keyLaneRow}>
-            {keyConfig.labels.map((label, i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.keyLaneBox,
-                  borderColor: keyConfig.colors[i],
-                  background: keyPressed[keyConfig.lanes[i]]
-                    ? `${keyConfig.colors[i]}33`
-                    : 'rgba(255,255,255,0.03)',
-                  boxShadow: keyPressed[keyConfig.lanes[i]]
-                    ? `0 0 30px ${keyConfig.colors[i]}44, inset 0 0 20px ${keyConfig.colors[i]}22`
-                    : 'none'
-                }}
-              >
-                <span style={{
-                  ...styles.keyLaneLabel,
-                  color: keyConfig.colors[i],
-                  transform: keyPressed[keyConfig.lanes[i]] ? 'scale(1.2)' : 'scale(1)',
-                  textShadow: keyPressed[keyConfig.lanes[i]]
-                    ? `0 0 20px ${keyConfig.colors[i]}`
-                    : 'none'
-                }}>
-                  {label}
-                </span>
-                <span style={styles.keyLaneCode}>{keyConfig.lanes[i]}</span>
-                {keyPressed[keyConfig.lanes[i]] && (
-                  <div style={{
-                    ...styles.keyLaneRipple,
-                    borderColor: keyConfig.colors[i]
-                  }} />
-                )}
-              </div>
-            ))}
+        <div style={styles.keyBeatMainArea}>
+          <div
+            style={{
+              ...styles.keyBeatRing,
+              ...(keyBeatFlash ? styles.keyBeatRingFlash : {}),
+              borderColor: keyBeatState === 'running'
+                ? '#ffcc00'
+                : keyBeatState === 'done'
+                  ? '#00ffcc'
+                  : 'rgba(255,255,255,0.15)'
+            }}
+          >
+            <div style={styles.keyBeatRingInner}>
+              {keyBeatState === 'idle' && (
+                <>
+                  <div style={styles.keyBeatIcon}>🎹</div>
+                  <div style={styles.keyBeatStatusText}>准备检测</div>
+                  <div style={styles.keyBeatDesc}>
+                    跟随节拍器节拍按下任意键<br />
+                    BPM {KEYBOARD_BPM} · 共 {KEYBOARD_TAPS} 拍
+                  </div>
+                </>
+              )}
+              {keyBeatState === 'countdown' && (
+                <>
+                  <div style={styles.keyBeatIcon}>⏳</div>
+                  <div style={styles.keyBeatStatusText}>准备...</div>
+                </>
+              )}
+              {keyBeatState === 'running' && (
+                <>
+                  <div style={styles.keyBeatTapCount}>
+                    {keyTapCount} / {KEYBOARD_TAPS}
+                  </div>
+                  <div style={styles.keyBeatHint}>
+                    听到节拍声时按键！
+                  </div>
+                </>
+              )}
+              {keyBeatState === 'done' && (
+                <>
+                  <div style={styles.keyBeatIcon}>✅</div>
+                  <div style={styles.keyBeatStatusText}>检测完成</div>
+                  {keyTapResults.length > 0 && (
+                    <div style={styles.keyBeatResultValue}>
+                      平均偏差: {avgDev > 0 ? '+' : ''}{Math.round(avgDev)}ms
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
+        </div>
+
+        <div style={styles.keyLaneVisualRow}>
+          {keyConfig.labels.map((label, i) => (
+            <div
+              key={i}
+              style={{
+                ...styles.keyLaneMiniBox,
+                borderColor: keyConfig.colors[i],
+                background: keyPressed[keyConfig.lanes[i]]
+                  ? `${keyConfig.colors[i]}33`
+                  : 'rgba(255,255,255,0.02)',
+                boxShadow: keyPressed[keyConfig.lanes[i]]
+                  ? `0 0 20px ${keyConfig.colors[i]}44`
+                  : 'none'
+              }}
+            >
+              <span style={{
+                ...styles.keyLaneMiniLabel,
+                color: keyConfig.colors[i],
+                transform: keyPressed[keyConfig.lanes[i]] ? 'scale(1.15)' : 'scale(1)'
+              }}>
+                {label}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div style={styles.keyStatsRow}>
           <div style={styles.keyStatCard}>
-            <span style={styles.keyStatLabel}>平均响应</span>
+            <span style={styles.keyStatLabel}>平均偏差</span>
             <span style={{
               ...styles.keyStatValue,
-              color: avgLatency <= 5 ? '#00ffcc' : avgLatency <= 15 ? '#ffcc00' : '#ff3366'
+              color: Math.abs(avgDev) <= 10 ? '#00ffcc' : Math.abs(avgDev) <= 30 ? '#ffcc00' : '#ff3366'
             }}>
-              {avgLatency}ms
+              {avgDev > 0 ? '+' : ''}{Math.round(avgDev)}ms
             </span>
           </div>
           <div style={styles.keyStatCard}>
-            <span style={styles.keyStatLabel}>采样次数</span>
-            <span style={styles.keyStatValue}>{calibration.keyLatencies.length}</span>
-          </div>
-          <div style={styles.keyStatCard}>
-            <span style={styles.keyStatLabel}>检测状态</span>
+            <span style={styles.keyStatLabel}>标准差</span>
             <span style={{
               ...styles.keyStatValue,
-              color: keyDetecting ? '#00ffcc' : 'rgba(255,255,255,0.4)'
+              color: stdDev <= 15 ? '#00ffcc' : stdDev <= 30 ? '#ffcc00' : '#ff3366'
             }}>
-              {keyDetecting ? '检测中' : '未开始'}
+              {Math.round(stdDev)}ms
             </span>
+          </div>
+          <div style={styles.keyStatCard}>
+            <span style={styles.keyStatLabel}>最早 / 最晚</span>
+            <span style={styles.keyStatValue}>
+              <span style={{ color: '#ff6633' }}>{minDev}ms</span>
+              {' · '}
+              <span style={{ color: '#6699ff' }}>{maxDev}ms</span>
+            </span>
+          </div>
+          <div style={styles.keyStatCard}>
+            <span style={styles.keyStatLabel}>采样数</span>
+            <span style={styles.keyStatValue}>{keyTapResults.length}</span>
           </div>
         </div>
+
+        {keyTapResults.length > 0 && (
+          <div style={styles.keyResultPanel}>
+            <div style={styles.keyResultHeader}>
+              <span style={styles.keyResultTitle}>📊 偏差分布</span>
+              <span style={styles.keyResultMeta}>
+                <span style={{ color: '#ff6633' }}>偏早 {earlyCount}</span>
+                {' · '}
+                <span style={{ color: '#6699ff' }}>偏晚 {lateCount}</span>
+              </span>
+            </div>
+            <div style={styles.keyResultBars}>
+              {keyTapResults.map((deviation, i) => {
+                const barWidth = Math.min(100, Math.abs(deviation) / 1.2)
+                const isEarly = deviation < 0
+                return (
+                  <div key={i} style={styles.keyResultBarRow}>
+                    <span style={styles.keyResultBarIndex}>#{i + 1}</span>
+                    <div style={styles.keyResultBarTrack}>
+                      <div style={styles.keyResultBarCenter} />
+                      <div
+                        style={{
+                          ...styles.keyResultBarFill,
+                          width: `${barWidth}%`,
+                          left: isEarly ? `${50 - barWidth}%` : '50%',
+                          background: Math.abs(deviation) <= 15
+                            ? 'linear-gradient(90deg, #00ffcc, #00ccaa)'
+                            : Math.abs(deviation) <= 40
+                              ? 'linear-gradient(90deg, #ffcc00, #ff9900)'
+                              : 'linear-gradient(90deg, #ff3366, #cc2255)'
+                        }}
+                      />
+                    </div>
+                    <span style={{
+                      ...styles.keyResultBarValue,
+                      color: deviation < 0 ? '#ff6633' : deviation > 0 ? '#6699ff' : '#00ffcc'
+                    }}>
+                      {deviation > 0 ? '+' : ''}{deviation}ms
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={styles.keyResultSummary}>
+              <div style={styles.keySummaryItem}>
+                <span style={styles.keySummaryLabel}>平均绝对偏差</span>
+                <span style={styles.keySummaryValue}>{avgLatency}ms</span>
+              </div>
+              <div style={styles.keySummaryItem}>
+                <span style={styles.keySummaryLabel}>一致性</span>
+                <span style={{
+                  ...styles.keySummaryValue,
+                  color: stdDev <= 10 ? '#00ffcc' : stdDev <= 25 ? '#ffcc00' : '#ff3366'
+                }}>
+                  {stdDev <= 10 ? '优秀' : stdDev <= 25 ? '良好' : '待提高'}
+                </span>
+              </div>
+              <div style={styles.keySummaryItem}>
+                <span style={styles.keySummaryLabel}>节拍器 BPM</span>
+                <span style={styles.keySummaryValue}>{KEYBOARD_BPM}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {recentEvents.length > 0 && (
           <div style={styles.keyEventLog}>
             <div style={styles.keyEventHeader}>
-              <span>输入事件日志</span>
-              <span style={styles.keyEventCount}>{keyEvents.length} 条记录</span>
+              <span>按键事件记录</span>
+              <span style={styles.keyEventCount}>{keyEvents.length} 条</span>
             </div>
             <div style={styles.keyEventList}>
               {recentEvents.map((ev, i) => (
@@ -511,14 +722,19 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
                 >
                   <span style={styles.keyEventLabel}>{ev.label}</span>
                   <span style={styles.keyEventCode}>{ev.code}</span>
+                  {ev.type === 'down' && ev.deviation !== undefined && (
+                    <span style={{
+                      ...styles.keyEventDeviation,
+                      color: ev.deviation < 0 ? '#ff6633' : ev.deviation > 0 ? '#6699ff' : '#00ffcc'
+                    }}>
+                      {ev.deviation > 0 ? '+' : ''}{ev.deviation}ms
+                    </span>
+                  )}
                   <span style={{
                     ...styles.keyEventType,
                     color: ev.type === 'down' ? '#00ffcc' : '#ff6633'
                   }}>
                     {ev.type === 'down' ? '↓ 按下' : '↑ 释放'}
-                  </span>
-                  <span style={styles.keyEventTime}>
-                    {(ev.timestamp % 100000).toFixed(0)}ms
                   </span>
                 </div>
               ))}
@@ -527,7 +743,7 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
         )}
 
         <div style={styles.keyControlRow}>
-          {!keyDetecting ? (
+          {keyBeatState === 'idle' || keyBeatState === 'done' ? (
             <button style={styles.startBtn} onClick={startKeyDetection}>
               ▶ 开始检测
             </button>
@@ -536,7 +752,12 @@ export default function CalibrationCenter({ keyConfig, onClose }) {
               ■ 停止检测
             </button>
           )}
-          <button style={styles.clearBtn} onClick={() => { setKeyEvents([]); clearKeyLatencies() }}>
+          <button style={styles.clearBtn} onClick={() => {
+            setKeyEvents([])
+            setKeyTapResults([])
+            setKeyTapCount(0)
+            clearKeyLatencies()
+          }}>
             清除记录
           </button>
         </div>
@@ -1196,6 +1417,87 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.2s'
   },
+  keyBeatMainArea: {
+    display: 'flex',
+    justifyContent: 'center',
+    padding: '12px 0 8px'
+  },
+  keyBeatRing: {
+    width: '180px',
+    height: '180px',
+    borderRadius: '50%',
+    border: '3px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.12s',
+    position: 'relative'
+  },
+  keyBeatRingFlash: {
+    boxShadow: '0 0 50px rgba(255,204,0,0.45), inset 0 0 30px rgba(255,204,0,0.15)',
+    background: 'rgba(255,204,0,0.08)',
+    transform: 'scale(1.04)'
+  },
+  keyBeatRingInner: {
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  keyBeatIcon: {
+    fontSize: '32px'
+  },
+  keyBeatStatusText: {
+    fontSize: '16px',
+    fontWeight: 700,
+    color: '#fff',
+    letterSpacing: '2px'
+  },
+  keyBeatDesc: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    lineHeight: '1.6'
+  },
+  keyBeatTapCount: {
+    fontSize: '30px',
+    fontWeight: 800,
+    color: '#ffcc00',
+    letterSpacing: '2px'
+  },
+  keyBeatHint: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: 600,
+    animation: 'blink 1s ease-in-out infinite'
+  },
+  keyBeatResultValue: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#00ffcc'
+  },
+  keyLaneVisualRow: {
+    display: 'flex',
+    gap: '10px',
+    justifyContent: 'center',
+    padding: '4px 0 8px'
+  },
+  keyLaneMiniBox: {
+    width: '70px',
+    height: '56px',
+    border: '2px solid',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.08s',
+    overflow: 'hidden'
+  },
+  keyLaneMiniLabel: {
+    fontSize: '20px',
+    fontWeight: 800,
+    transition: 'all 0.1s'
+  },
   keyVisualArea: {
     padding: '20px 0'
   },
@@ -1258,6 +1560,104 @@ const styles = {
     fontSize: '20px',
     fontWeight: 700,
     color: '#fff'
+  },
+  keyResultPanel: {
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '14px',
+    padding: '16px'
+  },
+  keyResultHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px'
+  },
+  keyResultTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#fff'
+  },
+  keyResultMeta: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: 600
+  },
+  keyResultBars: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    marginBottom: '12px'
+  },
+  keyResultBarRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
+  },
+  keyResultBarIndex: {
+    width: '26px',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.25)',
+    textAlign: 'right'
+  },
+  keyResultBarTrack: {
+    flex: 1,
+    height: '10px',
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: '5px',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  keyResultBarCenter: {
+    position: 'absolute',
+    left: '50%',
+    top: 0,
+    bottom: 0,
+    width: '1px',
+    background: 'rgba(255,255,255,0.15)'
+  },
+  keyResultBarFill: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    borderRadius: '5px',
+    transition: 'all 0.3s'
+  },
+  keyResultBarValue: {
+    width: '50px',
+    fontSize: '11px',
+    fontWeight: 600,
+    textAlign: 'right',
+    fontFamily: 'monospace'
+  },
+  keyResultSummary: {
+    display: 'flex',
+    gap: '12px',
+    padding: '10px 0 4px',
+    borderTop: '1px solid rgba(255,255,255,0.05)'
+  },
+  keySummaryItem: {
+    flex: 1,
+    textAlign: 'center'
+  },
+  keySummaryLabel: {
+    display: 'block',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.25)',
+    marginBottom: '3px',
+    letterSpacing: '1px'
+  },
+  keySummaryValue: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#fff'
+  },
+  keyEventDeviation: {
+    width: '55px',
+    fontWeight: 700,
+    fontSize: '11px',
+    fontFamily: 'monospace',
+    textAlign: 'right'
   },
   keyEventLog: {
     background: 'rgba(255,255,255,0.02)',
