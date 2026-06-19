@@ -9,13 +9,18 @@ import PracticeLab from './components/PracticeLab.jsx'
 import Tutorial from './components/Tutorial.jsx'
 import ActivityChallengeCenter from './components/ActivityChallengeCenter.jsx'
 import DailyChallenge from './components/DailyChallenge.jsx'
+import StoryMode from './components/StoryMode.jsx'
+import StoryDialogue from './components/StoryDialogue.jsx'
+import StoryResult from './components/StoryResult.jsx'
 import { defaultKeyConfig, tracks, getTrackWithDifficulty } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
 import { useCalibrationStore } from './store/useCalibrationStore.js'
 import { useThemeStore } from './store/useThemeStore.js'
 import { useDailyChallengeStore } from './store/useDailyChallengeStore.js'
+import { useStoryStore } from './store/useStoryStore.js'
 import { getConstraintModifiers } from './data/dailyChallengeData.js'
+import { getChapterById, getStagesByChapter, getStageById } from './data/storyData.js'
 import CalibrationCenter from './components/CalibrationCenter.jsx'
 import ThemeWorkshop from './components/ThemeWorkshop.jsx'
 
@@ -41,8 +46,14 @@ export default function App() {
   const [isDailyChallengeMode, setIsDailyChallengeMode] = useState(false)
   const [dailyChallengeModifiers, setDailyChallengeModifiers] = useState(null)
   const [dailyChallengeResult, setDailyChallengeResult] = useState(null)
+  const [showStoryMode, setShowStoryMode] = useState(false)
+  const [isStoryMode, setIsStoryMode] = useState(false)
+  const [currentStoryStage, setCurrentStoryStage] = useState(null)
+  const [storyResultData, setStoryResultData] = useState(null)
+  const [showStoryResult, setShowStoryResult] = useState(false)
 
   const calibrationStore = useCalibrationStore()
+  const storyStore = useStoryStore()
   const themeStore = useThemeStore()
   const dailyChallengeStore = useDailyChallengeStore()
 
@@ -110,6 +121,63 @@ export default function App() {
     setScreen('game')
   }, [dailyChallengeStore])
 
+  const handleStartStoryStage = useCallback((stage, track) => {
+    if (!stage || !track) return
+    storyStore.startStage(stage.id)
+    setCurrentStoryStage(stage)
+    setSelectedTrack(track)
+    setIsStoryMode(true)
+    setShowStoryMode(false)
+    setShowStoryResult(false)
+    setStoryResultData(null)
+    setScreen('game')
+  }, [storyStore])
+
+  const handleStoryRetry = useCallback(() => {
+    if (!currentStoryStage) return
+    const track = getTrackWithDifficulty(currentStoryStage.trackId, currentStoryStage.difficultyId)
+    if (!track) return
+    setSelectedTrack(track)
+    setShowStoryResult(false)
+    setStoryResultData(null)
+    setScreen('game')
+  }, [currentStoryStage])
+
+  const handleStoryNextStage = useCallback(() => {
+    if (!currentStoryStage) return
+    const stages = getStagesByChapter(currentStoryStage.chapterId)
+    const currentIndex = stages.findIndex(s => s.id === currentStoryStage.id)
+    if (currentIndex < stages.length - 1) {
+      const nextStage = stages[currentIndex + 1]
+      const track = getTrackWithDifficulty(nextStage.trackId, nextStage.difficultyId)
+      if (track) {
+        storyStore.startStage(nextStage.id)
+        setCurrentStoryStage(nextStage)
+        setSelectedTrack(track)
+        setShowStoryResult(false)
+        setStoryResultData(null)
+        setScreen('game')
+      }
+    } else {
+      setShowStoryResult(false)
+      setStoryResultData(null)
+      setIsStoryMode(false)
+      setCurrentStoryStage(null)
+      setShowStoryMode(true)
+      setScreen('select')
+    }
+  }, [currentStoryStage, storyStore])
+
+  const handleBackToStoryChapter = useCallback(() => {
+    setShowStoryResult(false)
+    setStoryResultData(null)
+    setIsStoryMode(false)
+    setCurrentStoryStage(null)
+    setShowStoryMode(true)
+    setScreen('select')
+    storyStore.clearStoryResult()
+  }, [storyStore])
+
   const handleGameEnd = (result) => {
     const growthResult = playerStore.processGameResult(result, selectedTrack)
     setGrowthInfo({
@@ -121,6 +189,14 @@ export default function App() {
     })
     setRecordChecks(growthResult.recordChecks)
     setGameResult(result)
+
+    if (isStoryMode && currentStoryStage) {
+      const storyResult = storyStore.processStageResult(result, selectedTrack)
+      setStoryResultData(storyResult)
+      setShowStoryResult(true)
+      return
+    }
+
     setScreen('result')
 
     if (isDailyChallengeMode) {
@@ -274,6 +350,7 @@ export default function App() {
           onOpenThemeWorkshop={() => setShowThemeWorkshop(true)}
           dailyChallengeState={dailyChallengeStore.dailyChallengeState}
           onOpenDailyChallenge={() => setShowDailyChallenge(true)}
+          onOpenStoryMode={() => setShowStoryMode(true)}
         />
       )}
       {screen === 'settings' && (
@@ -391,6 +468,35 @@ export default function App() {
           onStartChallenge={handleStartDailyChallenge}
           onClose={() => setShowDailyChallenge(false)}
           tracks={allTracks}
+        />
+      )}
+      {showStoryMode && (
+        <StoryMode
+          onStartStage={handleStartStoryStage}
+          onClose={() => setShowStoryMode(false)}
+          storyStore={storyStore}
+          playerData={playerStore.playerData}
+          keyConfig={themedKeyConfig}
+        />
+      )}
+      {showStoryResult && storyResultData && (
+        <StoryResult
+          storyResult={storyResultData}
+          onRetry={handleStoryRetry}
+          onNextStage={handleStoryNextStage}
+          onBackToChapter={handleBackToStoryChapter}
+          onShowDialogue={() => storyStore.showAfterDialogue()}
+          hasAfterDialogue={storyStore.hasAfterDialogue()}
+          chapterColor={getChapterById(currentStoryStage?.chapterId)?.color || '#66ff99'}
+        />
+      )}
+      {storyStore.showDialogue && (
+        <StoryDialogue
+          dialogues={storyStore.showDialogue.dialogues}
+          currentIndex={storyStore.showDialogue.currentIndex}
+          onAdvance={storyStore.advanceDialogue}
+          onSkip={storyStore.skipDialogue}
+          chapterColor={getChapterById(storyStore.storyData.currentChapter)?.color || '#66ff99'}
         />
       )}
       {showCalibrationCenter && (

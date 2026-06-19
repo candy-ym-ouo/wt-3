@@ -21,7 +21,8 @@ export default function TrackSelect({
   onOpenCalibrationCenter,
   onOpenThemeWorkshop,
   dailyChallengeState,
-  onOpenDailyChallenge
+  onOpenDailyChallenge,
+  onOpenStoryMode
 }) {
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
@@ -281,6 +282,9 @@ export default function TrackSelect({
           </button>
           <button style={styles.themeBtn} onClick={onOpenThemeWorkshop}>
             🎨 主题工坊
+          </button>
+          <button style={styles.storyBtn} onClick={onOpenStoryMode}>
+            📖 剧情模式
           </button>
         </div>
       </div>
@@ -959,6 +963,18 @@ const styles = {
     background: 'linear-gradient(135deg, rgba(255,51,102,0.15), rgba(204,102,255,0.1))',
     border: '1px solid rgba(255,51,102,0.3)',
     color: '#ff3366',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+    backdropFilter: 'blur(10px)',
+    transition: 'all 0.2s'
+  },
+  storyBtn: {
+    background: 'linear-gradient(135deg, rgba(102,51,255,0.15), rgba(51,102,255,0.1))',
+    border: '1px solid rgba(102,51,255,0.4)',
+    color: '#cc99ff',
     padding: '10px 20px',
     borderRadius: '8px',
     cursor: 'pointer',
