@@ -580,9 +580,12 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
         const range = practiceRange()
         const sectionEnd = currentSectionRef.current?.endTime || range.end
+        const shouldCheckReplay = now >= sectionEnd
+        const hasReplayItems = replayQueueRef.current.length > 0 && practiceSettings.replayMisses
+        const shouldLoop = practiceSettings.loopMode !== 'off'
 
-        if (practiceSettings.loopMode !== 'off' && now >= sectionEnd) {
-          if (replayQueueRef.current.length > 0 && practiceSettings.replayMisses) {
+        if (shouldCheckReplay && (hasReplayItems || shouldLoop)) {
+          if (hasReplayItems) {
             const nextReplay = replayQueueRef.current.shift()
             nextReplay.attempts += 1
             jumpToSection(nextReplay.startBar, nextReplay.endBar)
@@ -630,20 +633,14 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
               startTime: range.start,
               endTime: range.end
             }
-          } else {
-            gameEndedRef.current = true
-            endGame()
-            return
           }
-        }
-
-        if (practiceSettings.loopMode === 'off' && !isPracticeMode && now >= track.duration + 1.5 && !gameEndedRef.current) {
+        } else if (shouldCheckReplay && !hasReplayItems && !shouldLoop) {
           gameEndedRef.current = true
           endGame()
           return
         }
 
-        if (practiceSettings.loopMode === 'off' && isPracticeMode && now >= range.end && !gameEndedRef.current) {
+        if (!isPracticeMode && now >= track.duration + 1.5 && !gameEndedRef.current) {
           gameEndedRef.current = true
           endGame()
           return
