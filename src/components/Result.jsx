@@ -1,6 +1,14 @@
 import { useEffect, useState, useRef } from 'react'
+import { RANK_COLORS } from '../data/growthData.js'
 
-export default function Result({ result, track, onRetry, onBack }) {
+export default function Result({
+  result,
+  track,
+  onRetry,
+  onBack,
+  growthInfo,
+  playerData
+}) {
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
     perfect: 0,
@@ -11,6 +19,7 @@ export default function Result({ result, track, onRetry, onBack }) {
   })
   const [showRank, setShowRank] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [showGrowth, setShowGrowth] = useState(false)
   const canvasRef = useRef(null)
   const animRef = useRef(null)
 
@@ -18,10 +27,12 @@ export default function Result({ result, track, onRetry, onBack }) {
     const t = setTimeout(() => animateStats(), 300)
     const t2 = setTimeout(() => setShowRank(true), 1200)
     const t3 = setTimeout(() => setShowDetails(true), 1800)
+    const t4 = setTimeout(() => setShowGrowth(true), 2400)
     return () => {
       clearTimeout(t)
       clearTimeout(t2)
       clearTimeout(t3)
+      clearTimeout(t4)
     }
   }, [])
 
@@ -119,17 +130,6 @@ export default function Result({ result, track, onRetry, onBack }) {
     return () => cancelAnimationFrame(animRef.current)
   }, [result.rank])
 
-  const getRankColor = (rank) => {
-    const colors = {
-      S: '#ffcc00',
-      A: '#ff3366',
-      B: '#00ffcc',
-      C: '#6699ff',
-      D: '#999999'
-    }
-    return colors[rank] || colors.D
-  }
-
   const totalNotes = result.totalNotes
   const hitNotes = result.stats.perfect + result.stats.great + result.stats.good
   const hitRate = totalNotes > 0 ? Math.round((hitNotes / totalNotes) * 10000) / 100 : 0
@@ -160,8 +160,8 @@ export default function Result({ result, track, onRetry, onBack }) {
             <div
               style={{
                 ...styles.rankBadge,
-                color: getRankColor(result.rank),
-                textShadow: `0 0 60px ${getRankColor(result.rank)}88`,
+                color: RANK_COLORS[result.rank],
+                textShadow: `0 0 60px ${RANK_COLORS[result.rank]}88`,
                 opacity: showRank ? 1 : 0,
                 transform: showRank ? 'scale(1) rotate(0deg)' : 'scale(0.3) rotate(-20deg)'
               }}
@@ -265,6 +265,61 @@ export default function Result({ result, track, onRetry, onBack }) {
             />
           </div>
         </div>
+
+        {growthInfo && (
+          <div style={{
+            ...styles.growthSection,
+            opacity: showGrowth ? 1 : 0,
+            transform: showGrowth ? 'translateY(0)' : 'translateY(20px)'
+          }}>
+            <div style={styles.growthLabel}>🎮 玩家成长</div>
+
+            <div style={styles.growthRow}>
+              <div style={styles.growthItem}>
+                <span style={styles.growthItemLabel}>获得经验</span>
+                <span style={styles.growthItemValue}>+{growthInfo.gainedExp} EXP</span>
+              </div>
+              <div style={styles.growthItem}>
+                <span style={styles.growthItemLabel}>当前等级</span>
+                <span style={styles.growthItemValue}>Lv.{playerData.level}</span>
+              </div>
+            </div>
+
+            {growthInfo.levelUps.length > 0 && (
+              <div style={styles.levelUpNotice}>
+                🎉 恭喜升级！达到 Lv.{growthInfo.levelUps[growthInfo.levelUps.length - 1]}
+              </div>
+            )}
+
+            {growthInfo.newAchievements && growthInfo.newAchievements.length > 0 && (
+              <div style={styles.unlockSection}>
+                <div style={styles.unlockTitle}>🏆 新成就解锁</div>
+                <div style={styles.unlockList}>
+                  {growthInfo.newAchievements.map(a => (
+                    <div key={a.id} style={styles.unlockItem}>
+                      <span style={styles.unlockIcon}>{a.icon}</span>
+                      <span style={styles.unlockName}>{a.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {growthInfo.newTitles && growthInfo.newTitles.length > 0 && (
+              <div style={styles.unlockSection}>
+                <div style={styles.unlockTitle}>🎖️ 新称号解锁</div>
+                <div style={styles.unlockList}>
+                  {growthInfo.newTitles.map(t => (
+                    <div key={t.id} style={styles.unlockItem}>
+                      <span style={styles.unlockIcon}>{t.icon}</span>
+                      <span style={styles.unlockName}>{t.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={styles.actions}>
           <button style={styles.backBtn} onClick={onBack}>
@@ -505,7 +560,7 @@ const styles = {
     transition: 'all 0.5s ease-out'
   },
   progressSection: {
-    marginBottom: '32px'
+    marginBottom: '28px'
   },
   progressLabel: {
     fontSize: '11px',
@@ -522,6 +577,87 @@ const styles = {
   progressBarSegment: {
     height: '100%',
     transition: 'width 1s ease-out'
+  },
+  growthSection: {
+    padding: '20px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.08), rgba(0,255,204,0.06))',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    marginBottom: '28px',
+    transition: 'all 0.5s ease-out'
+  },
+  growthLabel: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: '2px',
+    marginBottom: '16px'
+  },
+  growthRow: {
+    display: 'flex',
+    gap: '20px',
+    marginBottom: '12px'
+  },
+  growthItem: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  growthItemLabel: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px'
+  },
+  growthItemValue: {
+    fontSize: '20px',
+    fontWeight: 800,
+    background: 'linear-gradient(135deg, #ff3366, #00ffcc)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  levelUpNotice: {
+    padding: '12px 20px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.2), rgba(255,153,0,0.1))',
+    border: '1px solid rgba(255,204,0,0.4)',
+    borderRadius: '8px',
+    textAlign: 'center',
+    fontSize: '16px',
+    fontWeight: 700,
+    color: '#ffcc00',
+    marginBottom: '12px',
+    animation: 'pulse 1.5s infinite'
+  },
+  unlockSection: {
+    marginTop: '12px'
+  },
+  unlockTitle: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: '8px'
+  },
+  unlockList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px'
+  },
+  unlockItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 14px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '20px'
+  },
+  unlockIcon: {
+    fontSize: '16px'
+  },
+  unlockName: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#fff'
   },
   actions: {
     display: 'flex',

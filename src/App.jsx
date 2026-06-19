@@ -4,7 +4,9 @@ import Game from './components/Game.jsx'
 import KeySettings from './components/KeySettings.jsx'
 import Result from './components/Result.jsx'
 import Editor from './components/Editor.jsx'
+import PlayerGrowthCenter from './components/PlayerGrowthCenter.jsx'
 import { defaultKeyConfig, tracks } from './data/tracks.js'
+import { usePlayerStore } from './store/usePlayerStore.js'
 
 export default function App() {
   const [screen, setScreen] = useState('select')
@@ -14,6 +16,10 @@ export default function App() {
   const [gameResult, setGameResult] = useState(null)
   const [customTracks, setCustomTracks] = useState([])
   const [isEditingMode, setIsEditingMode] = useState(false)
+  const [showGrowthCenter, setShowGrowthCenter] = useState(false)
+  const [growthInfo, setGrowthInfo] = useState(null)
+
+  const playerStore = usePlayerStore()
 
   const handleSelectTrack = (track) => {
     setSelectedTrack(track)
@@ -21,6 +27,13 @@ export default function App() {
   }
 
   const handleGameEnd = (result) => {
+    const growthResult = playerStore.processGameResult(result, selectedTrack)
+    setGrowthInfo({
+      gainedExp: growthResult.gainedExp,
+      levelUps: growthResult.levelUps,
+      newAchievements: playerStore.newlyUnlocked.achievements,
+      newTitles: playerStore.newlyUnlocked.titles
+    })
     setGameResult(result)
     setScreen('result')
   }
@@ -28,9 +41,11 @@ export default function App() {
   const handleBackToSelect = () => {
     setSelectedTrack(null)
     setGameResult(null)
+    setGrowthInfo(null)
     setIsEditingMode(false)
     setEditingTrack(null)
     setScreen('select')
+    playerStore.clearNewlyUnlocked()
   }
 
   const handleOpenEditor = (track) => {
@@ -84,6 +99,10 @@ export default function App() {
           onOpenEditor={() => handleOpenEditor(null)}
           onEditTrack={handleOpenEditor}
           keyConfig={keyConfig}
+          playerData={playerStore.playerData}
+          expProgress={playerStore.expProgress}
+          onOpenGrowthCenter={() => setShowGrowthCenter(true)}
+          getBestRecord={playerStore.getBestRecord}
         />
       )}
       {screen === 'settings' && (
@@ -132,6 +151,18 @@ export default function App() {
               handleBackToSelect()
             }
           }}
+          growthInfo={growthInfo}
+          playerData={playerStore.playerData}
+        />
+      )}
+      {showGrowthCenter && (
+        <PlayerGrowthCenter
+          playerData={playerStore.playerData}
+          expProgress={playerStore.expProgress}
+          expToNextLevel={playerStore.expToNextLevel}
+          onClose={() => setShowGrowthCenter(false)}
+          onSelectTitle={playerStore.setCurrentTitle}
+          onResetData={playerStore.resetPlayerData}
         />
       )}
     </div>

@@ -1,12 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
+import { TITLES, RANK_COLORS } from '../data/growthData.js'
 
-export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onOpenEditor, onEditTrack, keyConfig }) {
+export default function TrackSelect({
+  tracks,
+  onSelectTrack,
+  onOpenSettings,
+  onOpenEditor,
+  onEditTrack,
+  keyConfig,
+  playerData,
+  expProgress,
+  onOpenGrowthCenter,
+  getBestRecord
+}) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [hoverIndex, setHoverIndex] = useState(-1)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const timeRef = useRef(0)
+
+  const currentTitle = TITLES.find(t => t.id === playerData.currentTitle)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -81,6 +95,7 @@ export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onO
   }
 
   const track = tracks[selectedIndex]
+  const bestRecord = getBestRecord ? getBestRecord(track.id) : null
 
   return (
     <div
@@ -96,6 +111,26 @@ export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onO
           <span style={{ color: '#00ffcc' }}>◆</span>
         </h1>
         <div style={styles.topButtons}>
+          <div style={styles.playerInfo} onClick={onOpenGrowthCenter}>
+            <div style={styles.playerAvatar}>
+              {currentTitle ? currentTitle.icon : '🎵'}
+            </div>
+            <div style={styles.playerDetails}>
+              <div style={styles.playerLevel}>Lv.{playerData.level}</div>
+              <div style={styles.playerExpBar}>
+                <div style={{ ...styles.playerExpFill, width: `${expProgress}%` }} />
+              </div>
+            </div>
+            <div style={styles.playerName}>
+              {currentTitle ? (
+                <span style={styles.playerTitleText}>
+                  {currentTitle.icon} {currentTitle.name}
+                </span>
+              ) : (
+                <span style={styles.playerNoTitle}>点击查看成长</span>
+              )}
+            </div>
+          </div>
           <button style={styles.editorBtn} onClick={onOpenEditor}>
             ✎ 谱面编辑器
           </button>
@@ -109,31 +144,40 @@ export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onO
         <div style={styles.trackList}>
           <h2 style={styles.sectionTitle}>选择曲目</h2>
           <div style={styles.tracksContainer}>
-            {tracks.map((t, i) => (
-              <div
-                key={t.id}
-                style={{
-                  ...styles.trackCard,
-                  ...(i === selectedIndex ? styles.trackCardActive : {}),
-                  ...(i === hoverIndex ? styles.trackCardHover : {})
-                }}
-                onClick={() => setSelectedIndex(i)}
-                onMouseEnter={() => setHoverIndex(i)}
-                onMouseLeave={() => setHoverIndex(-1)}
-              >
-                <div style={styles.trackIndex}>
-                  {String(i + 1).padStart(2, '0')}
+            {tracks.map((t, i) => {
+              const best = getBestRecord ? getBestRecord(t.id) : null
+              return (
+                <div
+                  key={t.id}
+                  style={{
+                    ...styles.trackCard,
+                    ...(i === selectedIndex ? styles.trackCardActive : {}),
+                    ...(i === hoverIndex ? styles.trackCardHover : {})
+                  }}
+                  onClick={() => setSelectedIndex(i)}
+                  onMouseEnter={() => setHoverIndex(i)}
+                  onMouseLeave={() => setHoverIndex(-1)}
+                >
+                  <div style={styles.trackIndex}>
+                    {String(i + 1).padStart(2, '0')}
+                  </div>
+                  <div style={styles.trackInfo}>
+                    <div style={styles.trackTitle}>{t.title}</div>
+                    <div style={styles.trackArtist}>{t.artist}</div>
+                    {best && (
+                      <div style={styles.trackBest}>
+                        <span style={{ ...styles.bestRank, color: RANK_COLORS[best.rank] }}>{best.rank}</span>
+                        <span style={styles.bestScore}>{best.score.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={styles.trackMeta}>
+                    <span style={styles.difficultyBadge}>{t.difficulty}</span>
+                    <span style={styles.levelBadge}>Lv.{t.level}</span>
+                  </div>
                 </div>
-                <div style={styles.trackInfo}>
-                  <div style={styles.trackTitle}>{t.title}</div>
-                  <div style={styles.trackArtist}>{t.artist}</div>
-                </div>
-                <div style={styles.trackMeta}>
-                  <span style={styles.difficultyBadge}>{t.difficulty}</span>
-                  <span style={styles.levelBadge}>Lv.{t.level}</span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -143,6 +187,12 @@ export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onO
             <span style={styles.noteCountLabel}>
               {track.notes.length} 音符
             </span>
+            {bestRecord && (
+              <span style={styles.bestRecordLabel}>
+                最高分: <strong>{bestRecord.score.toLocaleString()}</strong>
+                {' '}<span style={{ color: RANK_COLORS[bestRecord.rank] }}>[{bestRecord.rank}]</span>
+              </span>
+            )}
           </div>
 
           <div style={styles.previewTitle}>{track.title}</div>
@@ -295,7 +345,69 @@ const styles = {
   },
   topButtons: {
     display: 'flex',
-    gap: '12px'
+    gap: '12px',
+    alignItems: 'center'
+  },
+  playerInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 16px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    backdropFilter: 'blur(10px)'
+  },
+  playerAvatar: {
+    width: '40px',
+    height: '40px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '22px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.2), rgba(0,255,204,0.2))',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,51,102,0.3)'
+  },
+  playerDetails: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  playerLevel: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#fff'
+  },
+  playerExpBar: {
+    width: '80px',
+    height: '6px',
+    background: 'rgba(255,255,255,0.1)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  playerExpFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #ff3366, #00ffcc)',
+    borderRadius: '3px',
+    transition: 'width 0.5s ease-out'
+  },
+  playerName: {
+    marginLeft: '4px'
+  },
+  playerTitleText: {
+    fontSize: '13px',
+    fontWeight: 600,
+    background: 'linear-gradient(135deg, #ffcc00, #ff9900)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  playerNoTitle: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)',
+    fontStyle: 'italic'
   },
   editorBtn: {
     background: 'rgba(0, 255, 204, 0.1)',
@@ -384,6 +496,22 @@ const styles = {
     fontSize: '12px',
     color: 'rgba(255,255,255,0.4)'
   },
+  trackBest: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginTop: '6px'
+  },
+  bestRank: {
+    fontSize: '14px',
+    fontWeight: 900,
+    lineHeight: 1
+  },
+  bestScore: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'monospace'
+  },
   trackMeta: {
     display: 'flex',
     gap: '8px'
@@ -417,7 +545,8 @@ const styles = {
   previewHeader: {
     display: 'flex',
     gap: '16px',
-    marginBottom: '16px'
+    marginBottom: '16px',
+    alignItems: 'center'
   },
   bpmLabel: {
     padding: '6px 14px',
@@ -431,6 +560,14 @@ const styles = {
     padding: '6px 14px',
     background: 'rgba(102,153,255,0.15)',
     color: '#6699ff',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: 600
+  },
+  bestRecordLabel: {
+    padding: '6px 14px',
+    background: 'rgba(255,204,0,0.1)',
+    color: 'rgba(255,255,255,0.7)',
     borderRadius: '6px',
     fontSize: '13px',
     fontWeight: 600
