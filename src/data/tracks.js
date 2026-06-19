@@ -6,6 +6,13 @@ export const defaultKeyConfig = {
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
+export const DIFFICULTIES = {
+  EASY: { id: 'easy', name: '简单', color: '#66ff99', levelRange: [1, 5] },
+  NORMAL: { id: 'normal', name: '普通', color: '#ffcc00', levelRange: [6, 10] },
+  HARD: { id: 'hard', name: '困难', color: '#ff6666', levelRange: [11, 15] },
+  EXPERT: { id: 'expert', name: '专家', color: '#cc66ff', levelRange: [16, 20] }
+}
+
 export function semitonesFromRoot(root, semitones) {
   const rootIndex = NOTE_NAMES.indexOf(root.replace(/[0-9]/g, ''))
   const rootOctave = parseInt(root.match(/[0-9]/g)?.join('') || '4')
@@ -294,17 +301,89 @@ function generateTrack2() {
   }
 }
 
+function generateEasyVariant(baseData, noteReduction = 2) {
+  const filteredNotes = baseData.gameNotes.filter((_, i) => i % noteReduction === 0)
+  filteredNotes.sort((a, b) => a.time - b.time)
+  filteredNotes.forEach((n, i) => { n.id = i })
+  return { ...baseData, gameNotes: filteredNotes }
+}
+
+function generateHardVariant(baseData, extraNoteFactor = 1.5) {
+  const extraNotes = []
+  const beat = 60 / baseData.bpm
+  baseData.gameNotes.forEach(note => {
+    if (Math.random() < 0.4) {
+      extraNotes.push({
+        id: 0,
+        time: note.time + beat * 0.125,
+        lane: (note.lane + 1) % 4,
+        type: 'normal'
+      })
+    }
+  })
+  const allNotes = [...baseData.gameNotes, ...extraNotes]
+  allNotes.sort((a, b) => a.time - b.time)
+  allNotes.forEach((n, i) => { n.id = i })
+  return { ...baseData, gameNotes: allNotes }
+}
+
 const track1Data = generateTrack1()
 const track2Data = generateTrack2()
+const track1Easy = generateEasyVariant(track1Data, 3)
+const track1Hard = generateHardVariant(track1Data, 1.8)
+const track2Easy = generateEasyVariant(track2Data, 4)
+const track2Hard = generateHardVariant(track2Data, 2)
 
-export const tracks = [
+export const TRACK_PACKS = [
+  {
+    id: 'starter',
+    name: '新手启程',
+    description: '适合新手的入门曲包，包含基础节奏练习曲目',
+    icon: '🌟',
+    color: '#66ff99',
+    order: 1,
+    unlockCondition: { type: 'none' },
+    trackIds: ['nebula', 'crystal_dream']
+  },
+  {
+    id: 'electronic',
+    name: '电子脉冲',
+    description: '充满电子能量的曲目，挑战你的节奏感',
+    icon: '⚡',
+    color: '#6699ff',
+    order: 2,
+    unlockCondition: { type: 'level', minLevel: 3 },
+    trackIds: ['void', 'neon_runner']
+  },
+  {
+    id: 'cosmic',
+    name: '星际漫游',
+    description: '来自宇宙深处的旋律，沉浸式音乐体验',
+    icon: '🌌',
+    color: '#cc66ff',
+    order: 3,
+    unlockCondition: { type: 'trackClear', trackId: 'void', difficulty: 'normal' },
+    trackIds: ['nebula', 'void', 'cosmic_dust']
+  },
+  {
+    id: 'master',
+    name: '大师殿堂',
+    description: '高手专属，极限挑战等待着你',
+    icon: '👑',
+    color: '#ffcc00',
+    order: 4,
+    unlockCondition: { type: 'clearedCount', count: 5 },
+    trackIds: ['void', 'neon_runner']
+  }
+]
+
+export const TRACKS = [
   {
     id: 'nebula',
     title: '星云脉冲',
     artist: 'Sonic Drift',
+    genre: '电子 / 合成器',
     bpm: track1Data.bpm,
-    difficulty: '普通',
-    level: 6,
     duration: track1Data.duration,
     synth: {
       leadOsc: 'sawtooth',
@@ -312,22 +391,67 @@ export const tracks = [
       padOsc: 'triangle',
       root: 'C4'
     },
-    notes: track1Data.gameNotes,
-    songData: {
-      lead: track1Data.lead,
-      bass: track1Data.bass,
-      chords: track1Data.chords,
-      drums: track1Data.drums
+    preview: {
+      coverGradient: ['#ff3366', '#6633ff'],
+      description: '穿越星云的脉冲之旅，感受宇宙的节奏律动',
+      tags: ['合成器', '太空', '入门'],
+      lyrics: null,
+      story: '在遥远的星云深处，古老的脉冲信号穿越光年，唤醒沉睡的节奏之魂...'
     },
-    totalNotes: track1Data.gameNotes.length
+    difficulties: [
+      {
+        id: 'easy',
+        name: '简单',
+        level: 3,
+        color: '#66ff99',
+        notes: track1Easy.gameNotes,
+        songData: {
+          lead: track1Easy.lead,
+          bass: track1Easy.bass,
+          chords: track1Easy.chords,
+          drums: track1Easy.drums
+        },
+        totalNotes: track1Easy.gameNotes.length
+      },
+      {
+        id: 'normal',
+        name: '普通',
+        level: 6,
+        color: '#ffcc00',
+        notes: track1Data.gameNotes,
+        songData: {
+          lead: track1Data.lead,
+          bass: track1Data.bass,
+          chords: track1Data.chords,
+          drums: track1Data.drums
+        },
+        totalNotes: track1Data.gameNotes.length
+      },
+      {
+        id: 'hard',
+        name: '困难',
+        level: 11,
+        color: '#ff6666',
+        notes: track1Hard.gameNotes,
+        songData: {
+          lead: track1Hard.lead,
+          bass: track1Hard.bass,
+          chords: track1Hard.chords,
+          drums: track1Hard.drums
+        },
+        totalNotes: track1Hard.gameNotes.length
+      }
+    ],
+    packIds: ['starter', 'cosmic'],
+    unlockCondition: { type: 'none' },
+    createdAt: '2024-01-15'
   },
   {
     id: 'void',
     title: '虚空回响',
     artist: 'Neon Abyss',
+    genre: '电子 / Dubstep',
     bpm: track2Data.bpm,
-    difficulty: '困难',
-    level: 9,
     duration: track2Data.duration,
     synth: {
       leadOsc: 'square',
@@ -335,13 +459,344 @@ export const tracks = [
       padOsc: 'sine',
       root: 'G4'
     },
-    notes: track2Data.gameNotes,
-    songData: {
-      lead: track2Data.lead,
-      bass: track2Data.bass,
-      chords: track2Data.chords,
-      drums: track2Data.drums
+    preview: {
+      coverGradient: ['#00ffcc', '#ff3366'],
+      description: '来自虚空深处的回响，重低音轰炸你的感官',
+      tags: ['Dubstep', '重低音', '挑战'],
+      lyrics: null,
+      story: '在虚空中，一切声音都化为回响。只有最强的节奏才能穿越这片寂静...'
     },
-    totalNotes: track2Data.gameNotes.length
+    difficulties: [
+      {
+        id: 'easy',
+        name: '简单',
+        level: 5,
+        color: '#66ff99',
+        notes: track2Easy.gameNotes,
+        songData: {
+          lead: track2Easy.lead,
+          bass: track2Easy.bass,
+          chords: track2Easy.chords,
+          drums: track2Easy.drums
+        },
+        totalNotes: track2Easy.gameNotes.length
+      },
+      {
+        id: 'normal',
+        name: '普通',
+        level: 9,
+        color: '#ffcc00',
+        notes: track2Data.gameNotes,
+        songData: {
+          lead: track2Data.lead,
+          bass: track2Data.bass,
+          chords: track2Data.chords,
+          drums: track2Data.drums
+        },
+        totalNotes: track2Data.gameNotes.length
+      },
+      {
+        id: 'hard',
+        name: '困难',
+        level: 14,
+        color: '#ff6666',
+        notes: track2Hard.gameNotes,
+        songData: {
+          lead: track2Hard.lead,
+          bass: track2Hard.bass,
+          chords: track2Hard.chords,
+          drums: track2Hard.drums
+        },
+        totalNotes: track2Hard.gameNotes.length
+      },
+      {
+        id: 'expert',
+        name: '专家',
+        level: 18,
+        color: '#cc66ff',
+        notes: track2Hard.gameNotes,
+        songData: {
+          lead: track2Hard.lead,
+          bass: track2Hard.bass,
+          chords: track2Hard.chords,
+          drums: track2Hard.drums
+        },
+        totalNotes: Math.floor(track2Hard.gameNotes.length * 1.3)
+      }
+    ],
+    packIds: ['electronic', 'cosmic', 'master'],
+    unlockCondition: { type: 'level', minLevel: 2 },
+    createdAt: '2024-02-20'
+  },
+  {
+    id: 'crystal_dream',
+    title: '水晶梦境',
+    artist: 'Aurora Bell',
+    genre: '氛围 / 钢琴',
+    bpm: 96,
+    duration: 180,
+    synth: {
+      leadOsc: 'triangle',
+      bassOsc: 'sine',
+      padOsc: 'sine',
+      root: 'C4'
+    },
+    preview: {
+      coverGradient: ['#66ccff', '#cc99ff'],
+      description: '在水晶般透明的梦境中，旋律如水般流淌',
+      tags: ['氛围', '治愈', '慢速'],
+      lyrics: null,
+      story: '沉睡时进入的水晶世界，每一个音符都折射出七彩光芒...'
+    },
+    difficulties: [
+      {
+        id: 'easy',
+        name: '简单',
+        level: 1,
+        color: '#66ff99',
+        notes: track1Easy.gameNotes.slice(0, 60),
+        songData: {
+          lead: track1Easy.lead,
+          bass: track1Easy.bass,
+          chords: track1Easy.chords,
+          drums: track1Easy.drums
+        },
+        totalNotes: 60
+      },
+      {
+        id: 'normal',
+        name: '普通',
+        level: 4,
+        color: '#ffcc00',
+        notes: track1Easy.gameNotes.slice(0, 100),
+        songData: {
+          lead: track1Data.lead,
+          bass: track1Data.bass,
+          chords: track1Data.chords,
+          drums: track1Data.drums
+        },
+        totalNotes: 100
+      }
+    ],
+    packIds: ['starter'],
+    unlockCondition: { type: 'none' },
+    createdAt: '2024-03-10'
+  },
+  {
+    id: 'neon_runner',
+    title: '霓虹狂奔',
+    artist: 'Cyber Wave',
+    genre: '赛博朋克 / 电子',
+    bpm: 175,
+    duration: 150,
+    synth: {
+      leadOsc: 'sawtooth',
+      bassOsc: 'square',
+      padOsc: 'sawtooth',
+      root: 'A4'
+    },
+    preview: {
+      coverGradient: ['#ff0066', '#00ffff'],
+      description: '霓虹都市的深夜狂奔，肾上腺素飙升的极速体验',
+      tags: ['赛博朋克', '高速', '高难度'],
+      lyrics: null,
+      story: '2077年的霓虹都市，你是最后的奔跑者。在雨幕与光影间穿梭...'
+    },
+    difficulties: [
+      {
+        id: 'normal',
+        name: '普通',
+        level: 8,
+        color: '#ffcc00',
+        notes: track2Data.gameNotes,
+        songData: {
+          lead: track2Data.lead,
+          bass: track2Data.bass,
+          chords: track2Data.chords,
+          drums: track2Data.drums
+        },
+        totalNotes: track2Data.gameNotes.length
+      },
+      {
+        id: 'hard',
+        name: '困难',
+        level: 13,
+        color: '#ff6666',
+        notes: track2Hard.gameNotes,
+        songData: {
+          lead: track2Hard.lead,
+          bass: track2Hard.bass,
+          chords: track2Hard.chords,
+          drums: track2Hard.drums
+        },
+        totalNotes: track2Hard.gameNotes.length
+      },
+      {
+        id: 'expert',
+        name: '专家',
+        level: 17,
+        color: '#cc66ff',
+        notes: track2Hard.gameNotes,
+        songData: {
+          lead: track2Hard.lead,
+          bass: track2Hard.bass,
+          chords: track2Hard.chords,
+          drums: track2Hard.drums
+        },
+        totalNotes: Math.floor(track2Hard.gameNotes.length * 1.4)
+      }
+    ],
+    packIds: ['electronic', 'master'],
+    unlockCondition: { type: 'trackClear', trackId: 'nebula', difficulty: 'normal' },
+    createdAt: '2024-04-05'
+  },
+  {
+    id: 'cosmic_dust',
+    title: '宇宙尘埃',
+    artist: 'Stellar Echo',
+    genre: '氛围 / 电子',
+    bpm: 110,
+    duration: 200,
+    synth: {
+      leadOsc: 'sine',
+      bassOsc: 'triangle',
+      padOsc: 'triangle',
+      root: 'F4'
+    },
+    preview: {
+      coverGradient: ['#9966ff', '#ff66cc'],
+      description: '漂浮在宇宙尘埃中，感受时间与空间的交织',
+      tags: ['宇宙', '氛围', '中速'],
+      lyrics: null,
+      story: '每一粒尘埃都是一个星系的过去。在浩瀚中，你听到了什么？'
+    },
+    difficulties: [
+      {
+        id: 'easy',
+        name: '简单',
+        level: 2,
+        color: '#66ff99',
+        notes: track1Easy.gameNotes.slice(0, 80),
+        songData: {
+          lead: track1Easy.lead,
+          bass: track1Easy.bass,
+          chords: track1Easy.chords,
+          drums: track1Easy.drums
+        },
+        totalNotes: 80
+      },
+      {
+        id: 'normal',
+        name: '普通',
+        level: 7,
+        color: '#ffcc00',
+        notes: track1Data.gameNotes,
+        songData: {
+          lead: track1Data.lead,
+          bass: track1Data.bass,
+          chords: track1Data.chords,
+          drums: track1Data.drums
+        },
+        totalNotes: track1Data.gameNotes.length
+      },
+      {
+        id: 'hard',
+        name: '困难',
+        level: 12,
+        color: '#ff6666',
+        notes: track1Hard.gameNotes,
+        songData: {
+          lead: track1Hard.lead,
+          bass: track1Hard.bass,
+          chords: track1Hard.chords,
+          drums: track1Hard.drums
+        },
+        totalNotes: track1Hard.gameNotes.length
+      }
+    ],
+    packIds: ['cosmic'],
+    unlockCondition: { type: 'trackClear', trackId: 'nebula', difficulty: 'normal' },
+    createdAt: '2024-05-18'
   }
 ]
+
+export const getTrackById = (id) => TRACKS.find(t => t.id === id)
+export const getPackById = (id) => TRACK_PACKS.find(p => p.id === id)
+
+export const getTracksByPack = (packId) => {
+  const pack = getPackById(packId)
+  if (!pack) return []
+  return pack.trackIds.map(id => getTrackById(id)).filter(Boolean)
+}
+
+export const getTrackWithDifficulty = (trackId, difficultyId) => {
+  const track = getTrackById(trackId)
+  if (!track) return null
+  const diff = track.difficulties.find(d => d.id === difficultyId)
+  if (!diff) return null
+  return {
+    ...track,
+    difficulty: diff.name,
+    level: diff.level,
+    notes: diff.notes,
+    songData: diff.songData,
+    totalNotes: diff.totalNotes,
+    difficultyId: diff.id,
+    difficultyColor: diff.color
+  }
+}
+
+export const checkUnlockCondition = (condition, playerData, bestRecords = {}) => {
+  if (!condition || condition.type === 'none') return { unlocked: true, reason: null }
+
+  switch (condition.type) {
+    case 'level':
+      if (playerData.level >= condition.minLevel) {
+        return { unlocked: true, reason: null }
+      }
+      return { unlocked: false, reason: `需要等级 Lv.${condition.minLevel}` }
+
+    case 'trackClear': {
+      const recordKey = `${condition.trackId}_${condition.difficulty || 'normal'}`
+      if (bestRecords[recordKey]?.cleared) {
+        return { unlocked: true, reason: null }
+      }
+      const trackName = getTrackById(condition.trackId)?.title || condition.trackId
+      const diffName = DIFFICULTIES[condition.difficulty?.toUpperCase()]?.name || condition.difficulty || '普通'
+      return { unlocked: false, reason: `需要通关「${trackName}」(${diffName})` }
+    }
+
+    case 'clearedCount': {
+      const clearedCount = Object.values(bestRecords).filter(r => r.cleared).length
+      if (clearedCount >= condition.count) {
+        return { unlocked: true, reason: null }
+      }
+      return { unlocked: false, reason: `需要通关 ${condition.count} 首曲目 (${clearedCount}/${condition.count})` }
+    }
+
+    default:
+      return { unlocked: true, reason: null }
+  }
+}
+
+export const tracks = TRACKS.map(t => {
+  const normalDiff = t.difficulties.find(d => d.id === 'normal') || t.difficulties[0]
+  return {
+    id: t.id,
+    title: t.title,
+    artist: t.artist,
+    bpm: t.bpm,
+    difficulty: normalDiff.name,
+    level: normalDiff.level,
+    duration: t.duration,
+    synth: t.synth,
+    notes: normalDiff.notes,
+    songData: normalDiff.songData,
+    totalNotes: normalDiff.totalNotes,
+    genre: t.genre,
+    preview: t.preview,
+    difficulties: t.difficulties,
+    packIds: t.packIds,
+    unlockCondition: t.unlockCondition
+  }
+})

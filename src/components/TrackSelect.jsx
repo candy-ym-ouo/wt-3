@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { TITLES, RANK_COLORS } from '../data/growthData.js'
+import { TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty } from '../data/tracks.js'
 
 export default function TrackSelect({
   tracks,
@@ -15,11 +16,19 @@ export default function TrackSelect({
   getBestRecord,
   challengeSummary,
   onOpenChallengeCenter,
-  activeMultiplier
+  activeMultiplier,
+  bestRecords
 }) {
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
+  const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
+  const [selectedPackId, setSelectedPackId] = useState('all')
+  const [filterDifficulty, setFilterDifficulty] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState('default')
+  const [showOnlyUnlocked, setShowOnlyUnlocked] = useState(false)
   const [hoverIndex, setHoverIndex] = useState(-1)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [viewMode, setViewMode] = useState('list')
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const timeRef = useRef(0)
@@ -94,12 +103,100 @@ export default function TrackSelect({
     }
   }, [keyConfig.colors])
 
+  const filteredTracks = useMemo(() => {
+    let result = [...tracks]
+
+    if (selectedPackId !== 'all') {
+      result = result.filter(t => t.packIds?.includes(selectedPackId))
+    }
+
+    if (filterDifficulty !== 'all') {
+      result = result.filter(t =>
+        t.difficulties?.some(d => d.id === filterDifficulty)
+      )
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(t =>
+        t.title.toLowerCase().includes(q) ||
+        t.artist.toLowerCase().includes(q) ||
+        t.genre?.toLowerCase().includes(q) ||
+        t.preview?.tags?.some(tag => tag.toLowerCase().includes(q))
+      )
+    }
+
+    if (showOnlyUnlocked) {
+      result = result.filter(t => {
+        const check = checkUnlockCondition(t.unlockCondition, playerData, bestRecords)
+        return check.unlocked
+      })
+    }
+
+    switch (sortBy) {
+      case 'level_asc':
+        result.sort((a, b) => a.level - b.level)
+        break
+      case 'level_desc':
+        result.sort((a, b) => b.level - a.level)
+        break
+      case 'title':
+        result.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+        break
+      case 'artist':
+        result.sort((a, b) => a.artist.localeCompare(b.artist, 'zh-CN'))
+        break
+      case 'bpm':
+        result.sort((a, b) => a.bpm - b.bpm)
+        break
+      default:
+        break
+    }
+
+    return result
+  }, [tracks, selectedPackId, filterDifficulty, searchQuery, showOnlyUnlocked, sortBy, playerData, bestRecords])
+
+  useEffect(() => {
+    if (filteredTracks.length > 0 && selectedTrackIndex >= filteredTracks.length) {
+      setSelectedTrackIndex(0)
+    }
+  }, [filteredTracks, selectedTrackIndex])
+
+  useEffect(() => {
+    if (filteredTracks.length > 0) {
+      const defaultDiff = filteredTracks[selectedTrackIndex]?.difficulties?.find(d => d.id === 'normal')
+        || filteredTracks[selectedTrackIndex]?.difficulties?.[0]
+      setSelectedDifficultyId(defaultDiff?.id || null)
+    }
+  }, [selectedTrackIndex, filteredTracks])
+
   const handleMouseMove = (e) => {
     setMousePos({ x: e.clientX, y: e.clientY })
   }
 
-  const track = tracks[selectedIndex]
-  const bestRecord = getBestRecord ? getBestRecord(track.id) : null
+  const track = filteredTracks[selectedTrackIndex]
+  const currentDifficulty = track?.difficulties?.find(d => d.id === selectedDifficultyId)
+    || track?.difficulties?.[0]
+
+  const getPlayableTrack = () => {
+    if (!track) return null
+    return getTrackWithDifficulty(track.id, selectedDifficultyId || track.difficulties[0]?.id)
+  }
+
+  const bestRecord = track && currentDifficulty && getBestRecord
+    ? getBestRecord(track.id, currentDifficulty.id)
+    : null
+
+  const trackUnlockCheck = track
+    ? checkUnlockCondition(track.unlockCondition, playerData, bestRecords)
+    : { unlocked: true, reason: null }
+
+  const packUnlockChecks = useMemo(() => {
+    return TRACK_PACKS.map(pack => ({
+      ...pack,
+      unlock: checkUnlockCondition(pack.unlockCondition, playerData, bestRecords)
+    }))
+  }, [playerData, bestRecords])
 
   return (
     <div
@@ -115,11 +212,11 @@ export default function TrackSelect({
           <span style={{ color: '#00ffcc' }}>◆</span>
         </h1>
         <div style={styles.topButtons}>
-          <div 
+          <div
             style={{
               ...styles.playerInfo,
               ...(challengeSummary?.pendingClaim > 0 ? styles.playerInfoGlow : {})
-            }} 
+            }}
             onClick={onOpenGrowthCenter}
           >
             <div style={styles.playerAvatar}>
@@ -160,11 +257,11 @@ export default function TrackSelect({
             )}
             {challengeSummary && (
               <div style={styles.challengeMiniProgress}>
-                <div 
-                  style={{ 
-                    ...styles.challengeMiniProgressFill, 
-                    width: `${challengeSummary.progressPercent}%` 
-                  }} 
+                <div
+                  style={{
+                    ...styles.challengeMiniProgressFill,
+                    width: `${challengeSummary.progressPercent}%`
+                  }}
                 />
               </div>
             )}
@@ -181,15 +278,15 @@ export default function TrackSelect({
       <div style={styles.mainContent}>
         <div style={styles.trackList}>
           {challengeSummary?.hasNewlyCompleted && (
-            <div 
+            <div
               style={styles.challengeAlertBanner}
               onClick={onOpenChallengeCenter}
             >
               <span style={styles.challengeAlertIcon}>🎁</span>
               <div style={styles.challengeAlertContent}>
                 <span style={styles.challengeAlertTitle}>
-                  {challengeSummary.pendingClaim > 0 
-                    ? `有 ${challengeSummary.pendingClaim} 个奖励待领取！` 
+                  {challengeSummary.pendingClaim > 0
+                    ? `有 ${challengeSummary.pendingClaim} 个奖励待领取！`
                     : '有新完成的挑战任务！'
                   }
                 </span>
@@ -198,112 +295,422 @@ export default function TrackSelect({
               <span style={styles.challengeAlertArrow}>→</span>
             </div>
           )}
-          <h2 style={styles.sectionTitle}>选择曲目</h2>
-          <div style={styles.tracksContainer}>
-            {tracks.map((t, i) => {
-              const best = getBestRecord ? getBestRecord(t.id) : null
-              return (
-                <div
-                  key={t.id}
+
+          <div style={styles.filterSection}>
+            <div style={styles.filterRow}>
+              <input
+                type="text"
+                placeholder="🔍 搜索曲目、艺术家、风格..."
+                style={styles.searchInput}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div style={styles.viewModeToggle}>
+                <button
                   style={{
-                    ...styles.trackCard,
-                    ...(i === selectedIndex ? styles.trackCardActive : {}),
-                    ...(i === hoverIndex ? styles.trackCardHover : {})
+                    ...styles.viewModeBtn,
+                    ...(viewMode === 'list' ? styles.viewModeBtnActive : {})
                   }}
-                  onClick={() => setSelectedIndex(i)}
-                  onMouseEnter={() => setHoverIndex(i)}
-                  onMouseLeave={() => setHoverIndex(-1)}
+                  onClick={() => setViewMode('list')}
                 >
-                  <div style={styles.trackIndex}>
-                    {String(i + 1).padStart(2, '0')}
-                  </div>
-                  <div style={styles.trackInfo}>
-                    <div style={styles.trackTitle}>{t.title}</div>
-                    <div style={styles.trackArtist}>{t.artist}</div>
-                    {best && (
-                      <div style={styles.trackBest}>
-                        <span style={{ ...styles.bestRank, color: RANK_COLORS[best.rank] }}>{best.rank}</span>
-                        <span style={styles.bestScore}>{best.score.toLocaleString()}</span>
+                  ☰
+                </button>
+                <button
+                  style={{
+                    ...styles.viewModeBtn,
+                    ...(viewMode === 'grid' ? styles.viewModeBtnActive : {})
+                  }}
+                  onClick={() => setViewMode('grid')}
+                >
+                  ▦
+                </button>
+              </div>
+            </div>
+
+            <div style={styles.packFilterRow}>
+              <span style={styles.filterLabel}>曲包:</span>
+              <div style={styles.packChips}>
+                <button
+                  style={{
+                    ...styles.packChip,
+                    ...(selectedPackId === 'all' ? styles.packChipActive : {})
+                  }}
+                  onClick={() => setSelectedPackId('all')}
+                >
+                  📚 全部
+                </button>
+                {packUnlockChecks.map(pack => (
+                  <button
+                    key={pack.id}
+                    style={{
+                      ...styles.packChip,
+                      ...(selectedPackId === pack.id ? {
+                        ...styles.packChipActive,
+                        borderColor: pack.color,
+                        color: pack.color
+                      } : {}),
+                      ...(!pack.unlock.unlocked ? styles.packChipLocked : {})
+                    }}
+                    onClick={() => pack.unlock.unlocked && setSelectedPackId(pack.id)}
+                    title={pack.unlock.unlocked ? pack.description : pack.unlock.reason}
+                  >
+                    <span>{pack.icon}</span>
+                    <span style={styles.packChipName}>{pack.name}</span>
+                    {!pack.unlock.unlocked && <span style={styles.lockIcon}>🔒</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={styles.filterRow}>
+              <div style={styles.filterGroup}>
+                <span style={styles.filterLabel}>难度:</span>
+                <div style={styles.difficultyChips}>
+                  <button
+                    style={{
+                      ...styles.diffChip,
+                      ...(filterDifficulty === 'all' ? styles.diffChipActive : {})
+                    }}
+                    onClick={() => setFilterDifficulty('all')}
+                  >
+                    全部
+                  </button>
+                  {Object.values(DIFFICULTIES).map(diff => (
+                    <button
+                      key={diff.id}
+                      style={{
+                        ...styles.diffChip,
+                        ...(filterDifficulty === diff.id ? {
+                          ...styles.diffChipActive,
+                          borderColor: diff.color,
+                          color: diff.color
+                        } : {})
+                      }}
+                      onClick={() => setFilterDifficulty(diff.id)}
+                    >
+                      {diff.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={styles.filterGroup}>
+                <span style={styles.filterLabel}>排序:</span>
+                <select
+                  style={styles.sortSelect}
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="default">默认排序</option>
+                  <option value="level_asc">难度 ↑</option>
+                  <option value="level_desc">难度 ↓</option>
+                  <option value="title">曲目名</option>
+                  <option value="artist">艺术家</option>
+                  <option value="bpm">BPM</option>
+                </select>
+              </div>
+
+              <label style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={showOnlyUnlocked}
+                  onChange={(e) => setShowOnlyUnlocked(e.target.checked)}
+                  style={styles.checkbox}
+                />
+                仅显示已解锁
+              </label>
+            </div>
+          </div>
+
+          <div style={styles.tracksHeader}>
+            <h2 style={styles.sectionTitle}>选择曲目</h2>
+            <span style={styles.trackCount}>
+              {filteredTracks.length} / {tracks.length} 首
+            </span>
+          </div>
+
+          <div style={{
+            ...styles.tracksContainer,
+            ...(viewMode === 'grid' ? styles.tracksGrid : {})
+          }}>
+            {filteredTracks.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>🎵</div>
+                <div style={styles.emptyTitle}>没有找到匹配的曲目</div>
+                <div style={styles.emptyDesc}>尝试调整筛选条件</div>
+              </div>
+            ) : (
+              filteredTracks.map((t, i) => {
+                const best = getBestRecord ? getBestRecord(t.id) : null
+                const unlockCheck = checkUnlockCondition(t.unlockCondition, playerData, bestRecords)
+                return (
+                  <div
+                    key={t.id}
+                    style={{
+                      ...styles.trackCard,
+                      ...(viewMode === 'grid' ? styles.trackCardGrid : {}),
+                      ...(i === selectedTrackIndex ? styles.trackCardActive : {}),
+                      ...(i === hoverIndex ? styles.trackCardHover : {}),
+                      ...(!unlockCheck.unlocked ? styles.trackCardLocked : {})
+                    }}
+                    onClick={() => unlockCheck.unlocked && setSelectedTrackIndex(i)}
+                    onMouseEnter={() => setHoverIndex(i)}
+                    onMouseLeave={() => setHoverIndex(-1)}
+                  >
+                    {viewMode === 'grid' && t.preview?.coverGradient && (
+                      <div
+                        style={{
+                          ...styles.trackCardCover,
+                          background: `linear-gradient(135deg, ${t.preview.coverGradient[0]}, ${t.preview.coverGradient[1]})`
+                        }}
+                      >
+                        <span style={styles.trackCardCoverIcon}>♪</span>
                       </div>
                     )}
+                    <div style={styles.trackCardContent}>
+                      {viewMode === 'list' && (
+                        <div style={styles.trackIndex}>
+                          {String(i + 1).padStart(2, '0')}
+                        </div>
+                      )}
+                      <div style={styles.trackInfo}>
+                        <div style={styles.trackTitleRow}>
+                          <div style={styles.trackTitle}>{t.title}</div>
+                          {!unlockCheck.unlocked && <span style={styles.lockIconSmall}>🔒</span>}
+                        </div>
+                        <div style={styles.trackArtist}>{t.artist}</div>
+                        {t.genre && (
+                          <div style={styles.trackGenre}>{t.genre}</div>
+                        )}
+                        {best && (
+                          <div style={styles.trackBest}>
+                            <span style={{ ...styles.bestRank, color: RANK_COLORS[best.rank] }}>{best.rank}</span>
+                            <span style={styles.bestScore}>{best.score.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {!unlockCheck.unlocked && (
+                          <div style={styles.unlockHint}>{unlockCheck.reason}</div>
+                        )}
+                      </div>
+                      <div style={styles.trackMeta}>
+                        <div style={styles.difficultyList}>
+                          {t.difficulties?.slice(0, viewMode === 'grid' ? 2 : 4).map(d => (
+                            <span
+                              key={d.id}
+                              style={{
+                                ...styles.difficultyDot,
+                                backgroundColor: d.color + '33',
+                                borderColor: d.color
+                              }}
+                              title={`${d.name} Lv.${d.level}`}
+                            >
+                              Lv.{d.level}
+                            </span>
+                          ))}
+                        </div>
+                        {viewMode === 'list' && (
+                          <span style={styles.bpmBadge}>
+                            {t.bpm} BPM
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div style={styles.trackMeta}>
-                    <span style={styles.difficultyBadge}>{t.difficulty}</span>
-                    <span style={styles.levelBadge}>Lv.{t.level}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        <div style={styles.previewPanel}>
-          <div style={styles.previewHeader}>
-            <span style={styles.bpmLabel}>BPM {track.bpm}</span>
-            <span style={styles.noteCountLabel}>
-              {track.notes.length} 音符
-            </span>
-            {bestRecord && (
-              <span style={styles.bestRecordLabel}>
-                最高分: <strong>{bestRecord.score.toLocaleString()}</strong>
-                {' '}<span style={{ color: RANK_COLORS[bestRecord.rank] }}>[{bestRecord.rank}]</span>
-              </span>
+                )
+              })
             )}
           </div>
+        </div>
 
-          <div style={styles.previewTitle}>{track.title}</div>
-          <div style={styles.previewArtist}>{track.artist}</div>
-
-          <div style={styles.waveformContainer}>
-            <WaveformPreview track={track} />
-          </div>
-
-          <div style={styles.keyHints}>
-            {keyConfig.labels.map((label, i) => (
+        {track && (
+          <div style={styles.previewPanel}>
+            {track.preview?.coverGradient && (
               <div
-                key={i}
                 style={{
-                  ...styles.keyHint,
-                  borderColor: keyConfig.colors[i]
+                  ...styles.previewCover,
+                  background: `linear-gradient(135deg, ${track.preview.coverGradient[0]}44, ${track.preview.coverGradient[1]}44)`
                 }}
               >
-                <span style={{ color: keyConfig.colors[i] }}>{label}</span>
-                <span style={styles.keyHintLane}>轨道 {i + 1}</span>
+                <div style={styles.previewCoverOverlay}>
+                  <div style={styles.previewCoverIcon}>♪</div>
+                </div>
               </div>
-            ))}
+            )}
+
+            <div style={styles.previewHeader}>
+              <div style={styles.previewHeaderLeft}>
+                <span style={styles.bpmLabel}>BPM {track.bpm}</span>
+                {currentDifficulty && (
+                  <span style={{
+                    ...styles.difficultyBadge,
+                    backgroundColor: currentDifficulty.color + '22',
+                    color: currentDifficulty.color,
+                    borderColor: currentDifficulty.color
+                  }}>
+                    {currentDifficulty.name} Lv.{currentDifficulty.level}
+                  </span>
+                )}
+                <span style={styles.noteCountLabel}>
+                  {currentDifficulty?.totalNotes || track.notes?.length} 音符
+                </span>
+              </div>
+              {bestRecord && (
+                <span style={styles.bestRecordLabel}>
+                  最高分: <strong>{bestRecord.score.toLocaleString()}</strong>
+                  {' '}<span style={{ color: RANK_COLORS[bestRecord.rank] }}>[{bestRecord.rank}]</span>
+                </span>
+              )}
+            </div>
+
+            {!trackUnlockCheck.unlocked && (
+              <div style={styles.lockedBanner}>
+                <span style={styles.lockedIcon}>🔒</span>
+                <span style={styles.lockedText}>{trackUnlockCheck.reason}</span>
+              </div>
+            )}
+
+            <div style={styles.previewTitle}>{track.title}</div>
+            <div style={styles.previewArtist}>{track.artist}</div>
+
+            {track.difficulties?.length > 1 && (
+              <div style={styles.difficultySelector}>
+                <span style={styles.diffSelectorLabel}>选择难度:</span>
+                <div style={styles.diffSelectorButtons}>
+                  {track.difficulties.map(diff => (
+                    <button
+                      key={diff.id}
+                      style={{
+                        ...styles.diffSelectorBtn,
+                        borderColor: diff.color,
+                        ...(selectedDifficultyId === diff.id ? {
+                          backgroundColor: diff.color + '33',
+                          color: diff.color,
+                          boxShadow: `0 0 15px ${diff.color}44`
+                        } : {})
+                      }}
+                      onClick={() => setSelectedDifficultyId(diff.id)}
+                    >
+                      <span style={styles.diffSelectorBtnName}>{diff.name}</span>
+                      <span style={styles.diffSelectorBtnLevel}>Lv.{diff.level}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={styles.previewInfoRow}>
+              {track.preview?.description && (
+                <div style={styles.previewDescription}>
+                  "{track.preview.description}"
+                </div>
+              )}
+            </div>
+
+            {track.preview?.tags?.length > 0 && (
+              <div style={styles.tagsContainer}>
+                {track.preview.tags.map((tag, i) => (
+                  <span key={i} style={styles.tag}>
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div style={styles.waveformContainer}>
+              <WaveformPreview track={getPlayableTrack() || track} />
+            </div>
+
+            {track.packIds?.length > 0 && (
+              <div style={styles.packsRow}>
+                <span style={styles.packsLabel}>所属曲包:</span>
+                <div style={styles.packsList}>
+                  {track.packIds.map(packId => {
+                    const pack = TRACK_PACKS.find(p => p.id === packId)
+                    return pack ? (
+                      <span
+                        key={packId}
+                        style={{
+                          ...styles.packBadge,
+                          borderColor: pack.color,
+                          color: pack.color
+                        }}
+                      >
+                        {pack.icon} {pack.name}
+                      </span>
+                    ) : null
+                  })}
+                </div>
+              </div>
+            )}
+
+            {track.preview?.story && (
+              <div style={styles.storyBox}>
+                <div style={styles.storyLabel}>📖 曲目背景</div>
+                <div style={styles.storyText}>{track.preview.story}</div>
+              </div>
+            )}
+
+            <div style={styles.keyHints}>
+              {keyConfig.labels.map((label, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.keyHint,
+                    borderColor: keyConfig.colors[i]
+                  }}
+                >
+                  <span style={{ color: keyConfig.colors[i] }}>{label}</span>
+                  <span style={styles.keyHintLane}>轨道 {i + 1}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              style={{
+                ...styles.startBtn,
+                ...(!trackUnlockCheck.unlocked ? styles.startBtnDisabled : {})
+              }}
+              onClick={() => {
+                const playable = getPlayableTrack()
+                if (playable && trackUnlockCheck.unlocked) {
+                  onSelectTrack(playable)
+                }
+              }}
+              disabled={!trackUnlockCheck.unlocked}
+              onMouseEnter={(e) => trackUnlockCheck.unlocked && (e.currentTarget.style.transform = 'scale(1.02)')}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              {trackUnlockCheck.unlocked ? '▶ 开始演奏' : `🔒 ${trackUnlockCheck.reason}`}
+            </button>
+
+            <button
+              style={styles.practiceBtn}
+              onClick={() => {
+                const playable = getPlayableTrack()
+                if (playable && onOpenPracticeLab) {
+                  onOpenPracticeLab(playable)
+                }
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              🧪 练习实验室
+            </button>
+
+            <button
+              style={styles.editBtn}
+              onClick={() => onEditTrack && onEditTrack(track)}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              ✎ 编辑谱面
+            </button>
+
+            <div style={styles.hintText}>
+              点击开始 · 按 {keyConfig.labels.join(' ')} 键演奏
+            </div>
           </div>
-
-          <button
-            style={styles.startBtn}
-            onClick={() => onSelectTrack(track)}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            ▶ 开始演奏
-          </button>
-
-          <button
-            style={styles.practiceBtn}
-            onClick={() => onOpenPracticeLab && onOpenPracticeLab(track)}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            🧪 练习实验室
-          </button>
-
-          <button
-            style={styles.editBtn}
-            onClick={() => onEditTrack && onEditTrack(track)}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            ✎ 编辑谱面
-          </button>
-
-          <div style={styles.hintText}>
-            点击开始 · 按 {keyConfig.labels.join(' ')} 键演奏
-          </div>
-        </div>
+        )}
       </div>
 
       <KeyTracker
@@ -320,7 +727,7 @@ function WaveformPreview({ track }) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !track) return
     const ctx = canvas.getContext('2d')
     canvas.width = canvas.offsetWidth * 2
     canvas.height = canvas.offsetHeight * 2
@@ -329,8 +736,8 @@ function WaveformPreview({ track }) {
 
     ctx.clearRect(0, 0, w, h)
 
-    const duration = track.duration
-    const visibleNotes = track.notes
+    const duration = track.duration || 60
+    const visibleNotes = track.notes || []
 
     ctx.strokeStyle = 'rgba(255,255,255,0.05)'
     ctx.lineWidth = 1
@@ -502,38 +909,228 @@ const styles = {
     zIndex: 2,
     display: 'flex',
     gap: '40px',
-    padding: '0 40px',
+    padding: '0 40px 40px',
     height: 'calc(100% - 100px)'
   },
   trackList: {
-    width: '420px',
+    width: '480px',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    overflow: 'hidden'
+  },
+  filterSection: {
+    marginBottom: '16px',
+    padding: '16px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  filterRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: '200px',
+    padding: '10px 14px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: '#fff',
+    fontSize: '13px',
+    outline: 'none',
+    transition: 'border-color 0.2s'
+  },
+  viewModeToggle: {
+    display: 'flex',
+    gap: '4px'
+  },
+  viewModeBtn: {
+    width: '36px',
+    height: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: 'rgba(255,255,255,0.5)',
+    cursor: 'pointer',
+    fontSize: '14px',
+    transition: 'all 0.2s'
+  },
+  viewModeBtnActive: {
+    background: 'rgba(255,51,102,0.15)',
+    borderColor: 'rgba(255,51,102,0.4)',
+    color: '#ff3366'
+  },
+  packFilterRow: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px'
+  },
+  filterLabel: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: 600,
+    paddingTop: '6px',
+    minWidth: '36px'
+  },
+  packChips: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+    flex: 1
+  },
+  packChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '6px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '20px',
+    color: 'rgba(255,255,255,0.7)',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: 500,
+    transition: 'all 0.2s'
+  },
+  packChipActive: {
+    background: 'rgba(255,51,102,0.15)',
+    borderColor: 'rgba(255,51,102,0.4)',
+    color: '#ff3366'
+  },
+  packChipLocked: {
+    opacity: 0.5,
+    cursor: 'not-allowed'
+  },
+  packChipName: {
+    whiteSpace: 'nowrap'
+  },
+  lockIcon: {
+    fontSize: '10px'
+  },
+  filterGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  difficultyChips: {
+    display: 'flex',
+    gap: '6px'
+  },
+  diffChip: {
+    padding: '5px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 600,
+    transition: 'all 0.2s'
+  },
+  diffChipActive: {
+    background: 'rgba(255,51,102,0.15)',
+    borderColor: 'rgba(255,51,102,0.4)',
+    color: '#ff3366'
+  },
+  sortSelect: {
+    padding: '6px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    color: '#fff',
+    fontSize: '12px',
+    cursor: 'pointer',
+    outline: 'none'
+  },
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    userSelect: 'none'
+  },
+  checkbox: {
+    accentColor: '#ff3366'
+  },
+  tracksHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px'
   },
   sectionTitle: {
     fontSize: '14px',
     fontWeight: 600,
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: '3px',
-    marginBottom: '16px'
+    margin: 0
+  },
+  trackCount: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.3)',
+    fontFamily: 'monospace'
   },
   tracksContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
     flex: 1,
-    overflowY: 'auto'
+    overflowY: 'auto',
+    paddingRight: '8px'
+  },
+  tracksGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    flexDirection: 'row'
+  },
+  emptyState: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px',
+    color: 'rgba(255,255,255,0.3)'
+  },
+  emptyIcon: {
+    fontSize: '48px',
+    marginBottom: '16px'
+  },
+  emptyTitle: {
+    fontSize: '16px',
+    fontWeight: 600,
+    marginBottom: '8px'
+  },
+  emptyDesc: {
+    fontSize: '13px'
   },
   trackCard: {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
-    padding: '18px 20px',
+    padding: '16px 18px',
     background: 'rgba(255,255,255,0.03)',
     border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: '12px',
     cursor: 'pointer',
     transition: 'all 0.25s ease'
+  },
+  trackCardGrid: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    padding: '12px',
+    gap: '10px'
   },
   trackCardActive: {
     background: 'linear-gradient(135deg, rgba(255,51,102,0.12), rgba(0,255,204,0.08))',
@@ -543,6 +1140,29 @@ const styles = {
   trackCardHover: {
     transform: 'translateX(4px)'
   },
+  trackCardLocked: {
+    opacity: 0.5
+  },
+  trackCardCover: {
+    width: '100%',
+    height: '80px',
+    borderRadius: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '4px'
+  },
+  trackCardCoverIcon: {
+    fontSize: '32px',
+    color: 'rgba(255,255,255,0.8)',
+    textShadow: '0 2px 10px rgba(0,0,0,0.3)'
+  },
+  trackCardContent: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    flex: 1
+  },
   trackIndex: {
     fontSize: '13px',
     color: 'rgba(255,255,255,0.3)',
@@ -550,16 +1170,33 @@ const styles = {
     minWidth: '28px'
   },
   trackInfo: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
+  },
+  trackTitleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px'
   },
   trackTitle: {
-    fontSize: '17px',
+    fontSize: '16px',
     fontWeight: 700,
-    marginBottom: '4px'
+    marginBottom: '2px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  lockIconSmall: {
+    fontSize: '12px'
   },
   trackArtist: {
     fontSize: '12px',
     color: 'rgba(255,255,255,0.4)'
+  },
+  trackGenre: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.3)',
+    marginTop: '2px'
   },
   trackBest: {
     display: 'flex',
@@ -568,7 +1205,7 @@ const styles = {
     marginTop: '6px'
   },
   bestRank: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 900,
     lineHeight: 1
   },
@@ -577,41 +1214,82 @@ const styles = {
     color: 'rgba(255,255,255,0.5)',
     fontFamily: 'monospace'
   },
+  unlockHint: {
+    fontSize: '11px',
+    color: '#ff6666',
+    marginTop: '4px'
+  },
   trackMeta: {
     display: 'flex',
-    gap: '8px'
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '6px'
   },
-  difficultyBadge: {
-    padding: '4px 10px',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: 600,
-    background: 'rgba(255,204,0,0.15)',
-    color: '#ffcc00'
+  difficultyList: {
+    display: 'flex',
+    gap: '4px',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end'
   },
-  levelBadge: {
-    padding: '4px 10px',
+  difficultyDot: {
+    padding: '2px 6px',
     borderRadius: '4px',
-    fontSize: '11px',
+    fontSize: '10px',
+    fontWeight: 700,
+    border: '1px solid'
+  },
+  bpmBadge: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    fontSize: '10px',
     fontWeight: 600,
-    background: 'rgba(0,255,204,0.15)',
-    color: '#00ffcc'
+    background: 'rgba(102,153,255,0.15)',
+    color: '#6699ff'
   },
   previewPanel: {
     flex: 1,
     background: 'rgba(10,10,20,0.8)',
     border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '16px',
-    padding: '32px',
+    padding: '24px 32px',
     backdropFilter: 'blur(20px)',
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
+    overflowY: 'auto'
+  },
+  previewCover: {
+    height: '100px',
+    borderRadius: '12px',
+    marginBottom: '20px',
+    overflow: 'hidden',
+    position: 'relative'
+  },
+  previewCoverOverlay: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(0,0,0,0.2)'
+  },
+  previewCoverIcon: {
+    fontSize: '48px',
+    color: 'rgba(255,255,255,0.6)',
+    textShadow: '0 2px 20px rgba(0,0,0,0.3)'
   },
   previewHeader: {
     display: 'flex',
+    justifyContent: 'space-between',
     gap: '16px',
-    marginBottom: '16px',
-    alignItems: 'center'
+    marginBottom: '12px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
+  },
+  previewHeaderLeft: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
   },
   bpmLabel: {
     padding: '6px 14px',
@@ -620,6 +1298,13 @@ const styles = {
     borderRadius: '6px',
     fontSize: '13px',
     fontWeight: 600
+  },
+  difficultyBadge: {
+    padding: '6px 14px',
+    borderRadius: '6px',
+    fontSize: '13px',
+    fontWeight: 700,
+    border: '1px solid'
   },
   noteCountLabel: {
     padding: '6px 14px',
@@ -637,25 +1322,101 @@ const styles = {
     fontSize: '13px',
     fontWeight: 600
   },
+  lockedBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '12px 16px',
+    background: 'rgba(255,102,102,0.1)',
+    border: '1px solid rgba(255,102,102,0.3)',
+    borderRadius: '10px',
+    marginBottom: '16px'
+  },
+  lockedIcon: {
+    fontSize: '18px'
+  },
+  lockedText: {
+    color: '#ff6666',
+    fontSize: '13px',
+    fontWeight: 500
+  },
   previewTitle: {
-    fontSize: '42px',
+    fontSize: '38px',
     fontWeight: 800,
-    letterSpacing: '4px',
+    letterSpacing: '3px',
     background: 'linear-gradient(135deg, #fff 0%, #ff3366 50%, #00ffcc 100%)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
-    marginBottom: '8px'
+    marginBottom: '6px'
   },
   previewArtist: {
     fontSize: '16px',
     color: 'rgba(255,255,255,0.5)',
-    marginBottom: '28px'
+    marginBottom: '16px'
+  },
+  difficultySelector: {
+    marginBottom: '16px'
+  },
+  diffSelectorLabel: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: '8px',
+    display: 'block'
+  },
+  diffSelectorButtons: {
+    display: 'flex',
+    gap: '10px',
+    flexWrap: 'wrap'
+  },
+  diffSelectorBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '10px 18px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '2px solid rgba(255,255,255,0.1)',
+    borderRadius: '10px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    gap: '2px'
+  },
+  diffSelectorBtnName: {
+    fontSize: '13px',
+    fontWeight: 700
+  },
+  diffSelectorBtnLevel: {
+    fontSize: '11px',
+    opacity: 0.8
+  },
+  previewInfoRow: {
+    marginBottom: '12px'
+  },
+  previewDescription: {
+    fontSize: '14px',
+    color: 'rgba(255,255,255,0.6)',
+    fontStyle: 'italic',
+    lineHeight: 1.6
+  },
+  tagsContainer: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '16px'
+  },
+  tag: {
+    padding: '4px 10px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '4px',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)'
   },
   waveformContainer: {
-    height: '180px',
+    height: '140px',
     background: 'rgba(0,0,0,0.3)',
     borderRadius: '12px',
-    marginBottom: '28px',
+    marginBottom: '16px',
     overflow: 'hidden',
     padding: '12px'
   },
@@ -663,14 +1424,56 @@ const styles = {
     width: '100%',
     height: '100%'
   },
+  packsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '16px',
+    flexWrap: 'wrap'
+  },
+  packsLabel: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)'
+  },
+  packsList: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap'
+  },
+  packBadge: {
+    padding: '4px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 600
+  },
+  storyBox: {
+    padding: '14px 16px',
+    background: 'rgba(0,0,0,0.2)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    marginBottom: '16px'
+  },
+  storyLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: '8px'
+  },
+  storyText: {
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 1.6
+  },
   keyHints: {
     display: 'flex',
     gap: '12px',
-    marginBottom: '28px'
+    marginBottom: '20px'
   },
   keyHint: {
     flex: 1,
-    padding: '14px',
+    padding: '12px',
     border: '2px solid',
     borderRadius: '10px',
     background: 'rgba(0,0,0,0.3)',
@@ -685,42 +1488,48 @@ const styles = {
   },
   startBtn: {
     width: '100%',
-    padding: '20px',
+    padding: '18px',
     background: 'linear-gradient(135deg, #ff3366 0%, #cc2255 100%)',
     border: 'none',
     borderRadius: '12px',
     color: '#fff',
-    fontSize: '20px',
+    fontSize: '18px',
     fontWeight: 700,
     letterSpacing: '4px',
     cursor: 'pointer',
     boxShadow: '0 8px 40px rgba(255,51,102,0.4)',
     transition: 'all 0.2s',
-    marginBottom: '12px'
+    marginBottom: '10px'
+  },
+  startBtnDisabled: {
+    background: 'rgba(255,255,255,0.1)',
+    color: 'rgba(255,255,255,0.4)',
+    cursor: 'not-allowed',
+    boxShadow: 'none'
   },
   practiceBtn: {
     width: '100%',
-    padding: '14px',
+    padding: '12px',
     background: 'linear-gradient(135deg, #6699ff 0%, #4477dd 100%)',
     border: 'none',
     borderRadius: '10px',
     color: '#fff',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 600,
     letterSpacing: '2px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    marginBottom: '12px',
+    marginBottom: '10px',
     boxShadow: '0 4px 20px rgba(102,153,255,0.3)'
   },
   editBtn: {
     width: '100%',
-    padding: '14px',
+    padding: '12px',
     background: 'rgba(0, 255, 204, 0.1)',
     border: '1px solid rgba(0, 255, 204, 0.4)',
     borderRadius: '10px',
     color: '#00ffcc',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 600,
     letterSpacing: '2px',
     cursor: 'pointer',
@@ -831,36 +1640,36 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
-    padding: '16px 20px',
-    marginBottom: '20px',
+    padding: '14px 18px',
+    marginBottom: '16px',
     background: 'linear-gradient(135deg, rgba(255,51,102,0.12), rgba(255,204,0,0.08))',
     border: '1px solid rgba(255,204,0,0.3)',
-    borderRadius: '14px',
+    borderRadius: '12px',
     cursor: 'pointer',
     transition: 'all 0.3s',
     animation: 'slideIn 0.5s ease-out, pulse 2s ease-in-out infinite 0.5s'
   },
   challengeAlertIcon: {
-    fontSize: '32px',
+    fontSize: '28px',
     flexShrink: 0
   },
   challengeAlertContent: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px'
+    gap: '2px'
   },
   challengeAlertTitle: {
-    fontSize: '15px',
+    fontSize: '14px',
     fontWeight: 700,
     color: '#ffcc00'
   },
   challengeAlertDesc: {
-    fontSize: '12px',
+    fontSize: '11px',
     color: 'rgba(255,255,255,0.5)'
   },
   challengeAlertArrow: {
-    fontSize: '24px',
+    fontSize: '20px',
     color: 'rgba(255,204,0,0.6)',
     flexShrink: 0
   }

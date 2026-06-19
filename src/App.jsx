@@ -41,7 +41,8 @@ export default function App() {
     resetTutorialState,
     getChallengeSummary,
     getActiveMultiplier,
-    challengeData
+    challengeData,
+    bestRecords
   } = playerStore
 
   const challengeSummary = useMemo(() => getChallengeSummary(), [challengeData, getChallengeSummary])
@@ -223,6 +224,7 @@ export default function App() {
           challengeSummary={challengeSummary}
           onOpenChallengeCenter={() => setShowChallengeCenter(true)}
           activeMultiplier={activeMultiplier}
+          bestRecords={bestRecords}
         />
       )}
       {screen === 'settings' && (
