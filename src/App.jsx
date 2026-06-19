@@ -7,6 +7,7 @@ import Editor from './components/Editor.jsx'
 import PlayerGrowthCenter from './components/PlayerGrowthCenter.jsx'
 import PracticeLab from './components/PracticeLab.jsx'
 import Tutorial from './components/Tutorial.jsx'
+import ActivityChallengeCenter from './components/ActivityChallengeCenter.jsx'
 import { defaultKeyConfig, tracks } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
@@ -20,6 +21,7 @@ export default function App() {
   const [customTracks, setCustomTracks] = useState([])
   const [isEditingMode, setIsEditingMode] = useState(false)
   const [showGrowthCenter, setShowGrowthCenter] = useState(false)
+  const [showChallengeCenter, setShowChallengeCenter] = useState(false)
   const [growthInfo, setGrowthInfo] = useState(null)
   const [practiceSection, setPracticeSection] = useState(null)
   const [recordChecks, setRecordChecks] = useState(null)
@@ -36,8 +38,14 @@ export default function App() {
     markFirstGameCompleted,
     goToTutorialStep,
     hideTutorial,
-    resetTutorialState
+    resetTutorialState,
+    getChallengeSummary,
+    getActiveMultiplier,
+    challengeData
   } = playerStore
+
+  const challengeSummary = useMemo(() => getChallengeSummary(), [challengeData, getChallengeSummary])
+  const activeMultiplier = useMemo(() => getActiveMultiplier(), [challengeData, getActiveMultiplier])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -211,6 +219,9 @@ export default function App() {
           expProgress={playerStore.expProgress}
           onOpenGrowthCenter={() => setShowGrowthCenter(true)}
           getBestRecord={playerStore.getBestRecord}
+          challengeSummary={challengeSummary}
+          onOpenChallengeCenter={() => setShowChallengeCenter(true)}
+          activeMultiplier={activeMultiplier}
         />
       )}
       {screen === 'settings' && (
@@ -295,6 +306,18 @@ export default function App() {
           onClose={() => setShowGrowthCenter(false)}
           onSelectTitle={playerStore.setCurrentTitle}
           onResetData={playerStore.resetPlayerData}
+        />
+      )}
+      {showChallengeCenter && (
+        <ActivityChallengeCenter
+          challengeData={playerStore.challengeData}
+          challengeSummary={challengeSummary}
+          onClose={() => setShowChallengeCenter(false)}
+          onClaimReward={playerStore.claimTaskReward}
+          getTaskStatus={playerStore.getTaskStatus}
+          getEventTitles={playerStore.getEventTitles}
+          getEventAchievements={playerStore.getEventAchievements}
+          tracks={allTracks}
         />
       )}
       {tutorialState.showTutorial && tutorialState.isInTutorialFlow && (

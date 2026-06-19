@@ -12,7 +12,10 @@ export default function TrackSelect({
   playerData,
   expProgress,
   onOpenGrowthCenter,
-  getBestRecord
+  getBestRecord,
+  challengeSummary,
+  onOpenChallengeCenter,
+  activeMultiplier
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [hoverIndex, setHoverIndex] = useState(-1)
@@ -112,7 +115,13 @@ export default function TrackSelect({
           <span style={{ color: '#00ffcc' }}>◆</span>
         </h1>
         <div style={styles.topButtons}>
-          <div style={styles.playerInfo} onClick={onOpenGrowthCenter}>
+          <div 
+            style={{
+              ...styles.playerInfo,
+              ...(challengeSummary?.pendingClaim > 0 ? styles.playerInfoGlow : {})
+            }} 
+            onClick={onOpenGrowthCenter}
+          >
             <div style={styles.playerAvatar}>
               {currentTitle ? currentTitle.icon : '🎵'}
             </div>
@@ -132,6 +141,36 @@ export default function TrackSelect({
               )}
             </div>
           </div>
+
+          <button
+            style={{
+              ...styles.challengeBtn,
+              ...(challengeSummary?.hasNewlyCompleted ? styles.challengeBtnNotify : {})
+            }}
+            onClick={onOpenChallengeCenter}
+          >
+            <span style={styles.challengeBtnIcon}>⚡</span>
+            <span style={styles.challengeBtnLabel}>挑战中心</span>
+            {activeMultiplier && activeMultiplier > 1 && (
+              <span style={styles.challengeMultiplier}>×{activeMultiplier.toFixed(1)}</span>
+            )}
+            {challengeSummary?.pendingClaim > 0 && (
+              <span style={styles.challengeBadge}>
+                {challengeSummary.pendingClaim}
+              </span>
+            )}
+            {challengeSummary && (
+              <div style={styles.challengeMiniProgress}>
+                <div 
+                  style={{ 
+                    ...styles.challengeMiniProgressFill, 
+                    width: `${challengeSummary.progressPercent}%` 
+                  }} 
+                />
+              </div>
+            )}
+          </button>
+
           <button style={styles.editorBtn} onClick={onOpenEditor}>
             ✎ 谱面编辑器
           </button>
@@ -143,6 +182,25 @@ export default function TrackSelect({
 
       <div style={styles.mainContent}>
         <div style={styles.trackList}>
+          {challengeSummary?.hasNewlyCompleted && (
+            <div 
+              style={styles.challengeAlertBanner}
+              onClick={onOpenChallengeCenter}
+            >
+              <span style={styles.challengeAlertIcon}>🎁</span>
+              <div style={styles.challengeAlertContent}>
+                <span style={styles.challengeAlertTitle}>
+                  {challengeSummary.pendingClaim > 0 
+                    ? `有 ${challengeSummary.pendingClaim} 个奖励待领取！` 
+                    : '有新完成的挑战任务！'
+                  }
+                </span>
+                <span style={styles.challengeAlertDesc}>点击前往挑战中心查看</span>
+              </div>
+              <span style={styles.challengeAlertArrow}>→</span>
+            </div>
+          )}
+
           <h2 style={styles.sectionTitle}>选择曲目</h2>
           <div style={styles.tracksContainer}>
             {tracks.map((t, i) => {
@@ -696,5 +754,117 @@ const styles = {
     fontSize: '13px',
     fontWeight: 700,
     background: 'rgba(0,0,0,0.8)'
+  },
+  playerInfoGlow: {
+    boxShadow: '0 0 20px rgba(255,204,0,0.3)',
+    borderColor: 'rgba(255,204,0,0.3)'
+  },
+  challengeBtn: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '10px 18px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.12), rgba(255,51,102,0.08))',
+    border: '1px solid rgba(255,204,0,0.25)',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    backdropFilter: 'blur(10px)',
+    overflow: 'hidden'
+  },
+  challengeBtnNotify: {
+    boxShadow: '0 0 24px rgba(255,51,102,0.4)',
+    animation: 'pulse 2s ease-in-out infinite'
+  },
+  challengeBtnIcon: {
+    fontSize: '18px'
+  },
+  challengeBtnLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#ffcc00',
+    letterSpacing: '1px'
+  },
+  challengeMultiplier: {
+    position: 'absolute',
+    top: '4px',
+    right: '4px',
+    padding: '2px 6px',
+    background: 'linear-gradient(135deg, #ff9900, #ffcc00)',
+    borderRadius: '10px',
+    fontSize: '10px',
+    fontWeight: 800,
+    color: '#000'
+  },
+  challengeBadge: {
+    position: 'absolute',
+    top: '-6px',
+    right: '-6px',
+    minWidth: '22px',
+    height: '22px',
+    padding: '0 6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(135deg, #ff3366, #ff6699)',
+    borderRadius: '11px',
+    fontSize: '11px',
+    fontWeight: 800,
+    color: '#fff',
+    boxShadow: '0 2px 8px rgba(255,51,102,0.5)',
+    border: '2px solid rgba(10,10,20,0.8)'
+  },
+  challengeMiniProgress: {
+    width: '100%',
+    height: '3px',
+    background: 'rgba(255,255,255,0.08)',
+    borderRadius: '2px',
+    overflow: 'hidden',
+    marginTop: '2px'
+  },
+  challengeMiniProgressFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #ffcc00, #ff3366)',
+    borderRadius: '2px',
+    transition: 'width 0.5s ease-out'
+  },
+  challengeAlertBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '16px 20px',
+    marginBottom: '20px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.12), rgba(255,204,0,0.08))',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '14px',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    animation: 'slideIn 0.5s ease-out, pulse 2s ease-in-out infinite 0.5s'
+  },
+  challengeAlertIcon: {
+    fontSize: '32px',
+    flexShrink: 0
+  },
+  challengeAlertContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  challengeAlertTitle: {
+    fontSize: '15px',
+    fontWeight: 700,
+    color: '#ffcc00'
+  },
+  challengeAlertDesc: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  challengeAlertArrow: {
+    fontSize: '24px',
+    color: 'rgba(255,204,0,0.6)',
+    flexShrink: 0
   }
 }
