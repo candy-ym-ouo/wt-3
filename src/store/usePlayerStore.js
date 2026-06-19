@@ -11,6 +11,12 @@ import {
   TITLES,
   DIFFICULTY_WEIGHT
 } from '../data/growthData.js'
+import {
+  isTutorialCompleted,
+  setTutorialCompleted,
+  resetTutorial,
+  TUTORIAL_STEPS
+} from '../data/tutorialData.js'
 
 const STORAGE_KEY = 'rhythm_circle_player_data'
 const BEST_RECORDS_KEY = 'rhythm_circle_best_records'
@@ -74,6 +80,14 @@ export function usePlayerStore() {
     titles: [],
     levelUps: []
   })
+
+  const [tutorialState, setTutorialState] = useState(() => ({
+    showTutorial: !isTutorialCompleted(),
+    currentStep: 0,
+    completedSteps: [],
+    hasCompletedFirstGame: false,
+    isInTutorialFlow: false
+  }))
 
   useEffect(() => {
     saveToStorage(STORAGE_KEY, playerData)
@@ -392,12 +406,113 @@ export function usePlayerStore() {
     })
   }, [])
 
+  const startTutorial = useCallback(() => {
+    setTutorialState(prev => ({
+      ...prev,
+      showTutorial: true,
+      currentStep: 0,
+      completedSteps: [],
+      isInTutorialFlow: true
+    }))
+  }, [])
+
+  const nextTutorialStep = useCallback(() => {
+    setTutorialState(prev => {
+      const nextStep = prev.currentStep + 1
+      const newCompletedSteps = [...prev.completedSteps, prev.currentStep]
+      
+      if (nextStep >= TUTORIAL_STEPS.length) {
+        setTutorialCompleted(true)
+        return {
+          ...prev,
+          showTutorial: false,
+          currentStep: TUTORIAL_STEPS.length - 1,
+          completedSteps: newCompletedSteps,
+          isInTutorialFlow: false
+        }
+      }
+      
+      return {
+        ...prev,
+        currentStep: nextStep,
+        completedSteps: newCompletedSteps
+      }
+    })
+  }, [])
+
+  const goToTutorialStep = useCallback((stepIndex) => {
+    setTutorialState(prev => ({
+      ...prev,
+      showTutorial: true,
+      currentStep: Math.max(0, Math.min(stepIndex, TUTORIAL_STEPS.length - 1))
+    }))
+  }, [])
+
+  const skipTutorial = useCallback(() => {
+    setTutorialCompleted(true)
+    setTutorialState(prev => ({
+      ...prev,
+      showTutorial: false,
+      isInTutorialFlow: false
+    }))
+  }, [])
+
+  const markFirstGameCompleted = useCallback(() => {
+    setTutorialState(prev => ({
+      ...prev,
+      hasCompletedFirstGame: true
+    }))
+  }, [])
+
+  const hideTutorial = useCallback(() => {
+    setTutorialState(prev => ({
+      ...prev,
+      showTutorial: false
+    }))
+  }, [])
+
+  const resetTutorialState = useCallback(() => {
+    setTutorialState({
+      showTutorial: true,
+      currentStep: 0,
+      completedSteps: [],
+      hasCompletedFirstGame: false,
+      isInTutorialFlow: false
+    })
+  }, [])
+
+  const showTutorial = useCallback(() => {
+    setTutorialState(prev => ({
+      ...prev,
+      showTutorial: true
+    }))
+  }, [])
+
+  const resetTutorialProgress = useCallback(() => {
+    resetTutorial()
+    setTutorialState({
+      showTutorial: true,
+      currentStep: 0,
+      completedSteps: [],
+      hasCompletedFirstGame: false,
+      isInTutorialFlow: false
+    })
+  }, [])
+
   const resetPlayerData = useCallback(() => {
     if (confirm('确定要重置所有玩家数据吗？此操作不可撤销！')) {
       setPlayerData({ ...defaultPlayerData })
       setBestRecords({})
       setPlayHistory([])
       setNewlyUnlocked({ achievements: [], titles: [], levelUps: [] })
+      resetTutorial()
+      setTutorialState({
+        showTutorial: true,
+        currentStep: 0,
+        completedSteps: [],
+        hasCompletedFirstGame: false,
+        isInTutorialFlow: false
+      })
       localStorage.removeItem(BEST_RECORDS_KEY)
       localStorage.removeItem(HISTORY_KEY)
     }
@@ -410,6 +525,7 @@ export function usePlayerStore() {
     newlyUnlocked,
     bestRecords,
     playHistory,
+    tutorialState,
     processGameResult,
     getBestRecord,
     checkIsNewRecord,
@@ -420,6 +536,15 @@ export function usePlayerStore() {
     setCurrentTitle,
     clearNewlyUnlocked,
     resetPlayerData,
-    getExpForLevel
+    getExpForLevel,
+    startTutorial,
+    nextTutorialStep,
+    goToTutorialStep,
+    skipTutorial,
+    markFirstGameCompleted,
+    hideTutorial,
+    showTutorial,
+    resetTutorialProgress,
+    resetTutorialState
   }
 }

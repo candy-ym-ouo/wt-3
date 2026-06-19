@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import TrackSelect from './components/TrackSelect.jsx'
 import Game from './components/Game.jsx'
 import KeySettings from './components/KeySettings.jsx'
@@ -6,7 +6,9 @@ import Result from './components/Result.jsx'
 import Editor from './components/Editor.jsx'
 import PlayerGrowthCenter from './components/PlayerGrowthCenter.jsx'
 import PracticeLab from './components/PracticeLab.jsx'
+import Tutorial from './components/Tutorial.jsx'
 import { defaultKeyConfig, tracks } from './data/tracks.js'
+import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
 
 export default function App() {
@@ -21,8 +23,35 @@ export default function App() {
   const [growthInfo, setGrowthInfo] = useState(null)
   const [practiceSection, setPracticeSection] = useState(null)
   const [recordChecks, setRecordChecks] = useState(null)
+  const [selectedTutorialTrackIndex, setSelectedTutorialTrackIndex] = useState(-1)
+  const [isTutorialGame, setIsTutorialGame] = useState(false)
+  const [showTutorialComplete, setShowTutorialComplete] = useState(false)
 
   const playerStore = usePlayerStore()
+  const {
+    tutorialState,
+    nextTutorialStep,
+    skipTutorial,
+    startTutorial,
+    markFirstGameCompleted,
+    goToTutorialStep,
+    hideTutorial,
+    resetTutorialState
+  } = playerStore
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('clearTutorial') === '1') {
+      resetTutorial()
+      resetTutorialState()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tutorialState.showTutorial && tutorialState.currentStep === 0 && !tutorialState.isInTutorialFlow) {
+      startTutorial()
+    }
+  }, [tutorialState.showTutorial, tutorialState.currentStep, tutorialState.isInTutorialFlow])
 
   const handleSelectTrack = (track) => {
     setSelectedTrack(track)
@@ -40,6 +69,11 @@ export default function App() {
     setRecordChecks(growthResult.recordChecks)
     setGameResult(result)
     setScreen('result')
+
+    if (isTutorialGame && result.cleared) {
+      markFirstGameCompleted()
+      setShowTutorialComplete(true)
+    }
   }
 
   const handleBackToSelect = () => {
@@ -98,6 +132,52 @@ export default function App() {
     setPracticeSection(section)
     setScreen('game')
   }
+
+  const handleTutorialNext = () => {
+    nextTutorialStep()
+  }
+
+  const handleTutorialSkip = () => {
+    skipTutorial()
+  }
+
+  const handleOpenKeySettingsFromTutorial = () => {
+    hideTutorial()
+    setScreen('settings')
+  }
+
+  const handleStartPracticeFromTutorial = () => {
+    if (!selectedTrack) {
+      setSelectedTrack(tutorialTrack)
+      setSelectedTutorialTrackIndex(-1)
+    }
+    setIsTutorialGame(true)
+    hideTutorial()
+    setScreen('game')
+  }
+
+  const handleTutorialTrackSelect = (track) => {
+    setSelectedTrack(track)
+  }
+
+  const handleTutorialTrackIndexSelect = (index) => {
+    setSelectedTutorialTrackIndex(index)
+  }
+
+  const handleTutorialComplete = () => {
+    setShowTutorialComplete(false)
+    nextTutorialStep()
+    setIsTutorialGame(false)
+  }
+
+  useEffect(() => {
+    if (tutorialState.isInTutorialFlow && screen === 'select' && !tutorialState.showTutorial && tutorialState.currentStep === 2) {
+      const timer = setTimeout(() => {
+        goToTutorialStep(3)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [screen, tutorialState.isInTutorialFlow, tutorialState.showTutorial, tutorialState.currentStep])
 
   const allTracks = useMemo(() => {
     const trackMap = new Map()
@@ -165,6 +245,7 @@ export default function App() {
           }}
           isPracticeMode={practiceSection !== null}
           practiceSection={practiceSection}
+          isTutorialMode={isTutorialGame}
         />
       )}
       {screen === 'result' && gameResult && (
@@ -186,6 +267,9 @@ export default function App() {
           trackHistory={playerStore.getTrackHistory(selectedTrack.id, selectedTrack.difficulty)}
           bestRecord={playerStore.getBestRecord(selectedTrack.id, selectedTrack.difficulty)}
           difficultyLeaderboard={playerStore.getDifficultyLeaderboard(selectedTrack.difficulty)}
+          isTutorialGame={isTutorialGame}
+          showTutorialComplete={showTutorialComplete}
+          onTutorialComplete={handleTutorialComplete}
         />
       )}
       {showGrowthCenter && (
@@ -196,6 +280,20 @@ export default function App() {
           onClose={() => setShowGrowthCenter(false)}
           onSelectTitle={playerStore.setCurrentTitle}
           onResetData={playerStore.resetPlayerData}
+        />
+      )}
+      {tutorialState.showTutorial && tutorialState.isInTutorialFlow && (
+        <Tutorial
+          currentStep={tutorialState.currentStep}
+          onNext={handleTutorialNext}
+          onSkip={handleTutorialSkip}
+          onOpenKeySettings={handleOpenKeySettingsFromTutorial}
+          onStartPractice={handleStartPracticeFromTutorial}
+          keyConfig={keyConfig}
+          tracks={allTracks}
+          onSelectTrack={handleTutorialTrackSelect}
+          selectedTrackIndex={selectedTutorialTrackIndex}
+          onTrackSelect={handleTutorialTrackIndexSelect}
         />
       )}
     </div>

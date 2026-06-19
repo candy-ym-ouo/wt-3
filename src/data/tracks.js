@@ -6,7 +6,7 @@ export const defaultKeyConfig = {
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-function semitonesFromRoot(root, semitones) {
+export function semitonesFromRoot(root, semitones) {
   const rootIndex = NOTE_NAMES.indexOf(root.replace(/[0-9]/g, ''))
   const rootOctave = parseInt(root.match(/[0-9]/g)?.join('') || '4')
   const totalSemitones = rootIndex + semitones

@@ -18,7 +18,10 @@ export default function Result({
   trackLeaderboard,
   trackHistory,
   bestRecord,
-  difficultyLeaderboard
+  difficultyLeaderboard,
+  isTutorialGame = false,
+  showTutorialComplete = false,
+  onTutorialComplete
 }) {
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
@@ -178,6 +181,68 @@ export default function Result({
       <div style={styles.bgCanvas}>
         <canvas ref={canvasRef} style={styles.canvas} />
       </div>
+
+      {showTutorialComplete && isTutorialGame && (
+        <div style={styles.tutorialCompleteOverlay}>
+          <div style={styles.tutorialCompleteModal}>
+            <div style={styles.tutorialCompleteIcon}>🎉</div>
+            <h2 style={styles.tutorialCompleteTitle}>恭喜完成教学！</h2>
+            <p style={styles.tutorialCompleteDesc}>
+              你已经掌握了基本操作，准备好挑战更多曲目了吗？
+            </p>
+            
+            <div style={styles.tutorialStats}>
+              <div style={styles.tutorialStatItem}>
+                <span style={styles.tutorialStatLabel}>得分</span>
+                <span style={styles.tutorialStatValue}>{result.score.toLocaleString()}</span>
+              </div>
+              <div style={styles.tutorialStatItem}>
+                <span style={styles.tutorialStatLabel}>准确率</span>
+                <span style={styles.tutorialStatValue}>{result.accuracy.toFixed(2)}%</span>
+              </div>
+              <div style={styles.tutorialStatItem}>
+                <span style={styles.tutorialStatLabel}>最大连击</span>
+                <span style={styles.tutorialStatValue}>{result.maxCombo}</span>
+              </div>
+            </div>
+
+            <div style={styles.tutorialFeedback}>
+              {result.accuracy >= 90 ? (
+                <div style={{ ...styles.feedbackCard, background: 'linear-gradient(135deg, rgba(255,204,0,0.2), rgba(255,153,0,0.1))', borderColor: 'rgba(255,204,0,0.5)' }}>
+                  <span style={styles.feedbackIcon}>⭐</span>
+                  <span style={styles.feedbackText}>太棒了！你的节奏感非常好！</span>
+                </div>
+              ) : result.accuracy >= 70 ? (
+                <div style={{ ...styles.feedbackCard, background: 'linear-gradient(135deg, rgba(0,255,204,0.2), rgba(0,204,170,0.1))', borderColor: 'rgba(0,255,204,0.5)' }}>
+                  <span style={styles.feedbackIcon}>👍</span>
+                  <span style={styles.feedbackText}>做得不错！继续练习会更好！</span>
+                </div>
+              ) : (
+                <div style={{ ...styles.feedbackCard, background: 'linear-gradient(135deg, rgba(102,153,255,0.2), rgba(68,119,221,0.1))', borderColor: 'rgba(102,153,255,0.5)' }}>
+                  <span style={styles.feedbackIcon}>💪</span>
+                  <span style={styles.feedbackText}>继续加油！多练习就能进步！</span>
+                </div>
+              )}
+            </div>
+
+            <div style={styles.tutorialTips}>
+              <div style={styles.tutorialTipTitle}>💡 下一步建议：</div>
+              <ul style={styles.tutorialTipList}>
+                <li style={styles.tutorialTipListLi}>尝试挑战【普通】难度的"星云脉冲"</li>
+                <li style={styles.tutorialTipListLi}>去设置里调整适合你的键位</li>
+                <li style={styles.tutorialTipListLi}>使用练习实验室提高薄弱环节</li>
+              </ul>
+            </div>
+
+            <button
+              style={styles.tutorialCompleteBtn}
+              onClick={onTutorialComplete}
+            >
+              开始正式游戏 →
+            </button>
+          </div>
+        </div>
+      )}
 
       {showRecordBanner && hasNewRecord && (
         <div style={styles.newRecordBanner}>
@@ -1259,5 +1324,148 @@ const styles = {
     fontSize: '11px',
     color: 'rgba(255,255,255,0.3)',
     letterSpacing: '2px'
+  },
+  tutorialCompleteOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.9)',
+    backdropFilter: 'blur(15px)',
+    zIndex: 100,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    animation: 'fadeIn 0.5s ease-out'
+  },
+  tutorialCompleteModal: {
+    width: '520px',
+    maxWidth: '90vw',
+    padding: '48px 40px',
+    background: 'linear-gradient(135deg, rgba(15,15,30,0.98), rgba(10,10,20,0.95))',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '24px',
+    textAlign: 'center',
+    boxShadow: '0 30px 100px rgba(255,204,0,0.15), 0 0 60px rgba(255,51,102,0.1)',
+    animation: 'slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
+  },
+  tutorialCompleteIcon: {
+    fontSize: '72px',
+    marginBottom: '16px',
+    animation: 'bounce 1s ease-in-out infinite'
+  },
+  tutorialCompleteTitle: {
+    fontSize: '32px',
+    fontWeight: 800,
+    letterSpacing: '4px',
+    margin: '0 0 12px 0',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff3366 50%, #00ffcc 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  tutorialCompleteDesc: {
+    fontSize: '14px',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: '28px'
+  },
+  tutorialStats: {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '24px'
+  },
+  tutorialStatItem: {
+    flex: 1,
+    padding: '16px 12px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px'
+  },
+  tutorialStatLabel: {
+    display: 'block',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px',
+    marginBottom: '6px'
+  },
+  tutorialStatValue: {
+    fontSize: '20px',
+    fontWeight: 800,
+    color: '#ffcc00',
+    fontFamily: 'monospace'
+  },
+  tutorialFeedback: {
+    marginBottom: '24px'
+  },
+  feedbackCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '16px 20px',
+    border: '1px solid',
+    borderRadius: '12px'
+  },
+  feedbackIcon: {
+    fontSize: '28px'
+  },
+  feedbackText: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#fff'
+  },
+  tutorialTips: {
+    padding: '16px 20px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    marginBottom: '28px',
+    textAlign: 'left'
+  },
+  tutorialTipTitle: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: '10px'
+  },
+  tutorialTipList: {
+    margin: 0,
+    paddingLeft: '20px'
+  },
+  tutorialTipListLi: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: '4px'
+  },
+  tutorialCompleteBtn: {
+    width: '100%',
+    padding: '18px',
+    background: 'linear-gradient(135deg, #ff3366 0%, #cc2255 100%)',
+    border: 'none',
+    borderRadius: '12px',
+    color: '#fff',
+    fontSize: '16px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    boxShadow: '0 8px 30px rgba(255,51,102,0.4)',
+    transition: 'all 0.2s'
   }
 }
+
+const styleSheet = document.createElement('style')
+styleSheet.textContent = `
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+`
+document.head.appendChild(styleSheet)

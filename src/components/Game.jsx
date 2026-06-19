@@ -25,9 +25,12 @@ const JUDGE_RANK = {
   miss: 1
 }
 
-export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null }) {
+export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
+
+  const tutorialPlaybackSpeed = isTutorialMode ? 0.6 : 1.0
+  const tutorialJudgeMultiplier = isTutorialMode ? 1.5 : 1.0
 
   const [gameState, setGameState] = useState('ready')
   const [score, setScore] = useState(0)
@@ -214,10 +217,11 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
   const updatePlaybackSpeed = useCallback((speed) => {
     try {
-      Tone.Transport.playbackRate = speed
-      setCurrentPlaybackSpeed(speed)
+      const actualSpeed = isTutorialMode ? tutorialPlaybackSpeed : speed
+      Tone.Transport.playbackRate = actualSpeed
+      setCurrentPlaybackSpeed(actualSpeed)
     } catch(e) {}
-  }, [])
+  }, [isTutorialMode, tutorialPlaybackSpeed])
 
   const scheduleSong = useCallback(() => {
     const { songData } = track
@@ -334,11 +338,18 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     let closestNote = null
     let closestDiff = Infinity
 
+    const adjustedJudgeWindows = {
+      perfect: JUDGE_WINDOWS.perfect * tutorialJudgeMultiplier,
+      great: JUDGE_WINDOWS.great * tutorialJudgeMultiplier,
+      good: JUDGE_WINDOWS.good * tutorialJudgeMultiplier,
+      miss: JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
+    }
+
     for (let i = 0; i < data.activeNotes.length; i++) {
       const note = data.activeNotes[i]
       if (note.lane !== lane || note.hit || note.missed) continue
       const diff = Math.abs(note.time - timeNow)
-      if (diff < closestDiff && diff < JUDGE_WINDOWS.miss) {
+      if (diff < closestDiff && diff < adjustedJudgeWindows.miss) {
         closestDiff = diff
         closestNote = { note, index: i }
       }
@@ -349,9 +360,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     const { note, index } = closestNote
     let judgeType = 'miss'
 
-    if (closestDiff <= JUDGE_WINDOWS.perfect) judgeType = 'perfect'
-    else if (closestDiff <= JUDGE_WINDOWS.great) judgeType = 'great'
-    else if (closestDiff <= JUDGE_WINDOWS.good) judgeType = 'good'
+    if (closestDiff <= adjustedJudgeWindows.perfect) judgeType = 'perfect'
+    else if (closestDiff <= adjustedJudgeWindows.great) judgeType = 'great'
+    else if (closestDiff <= adjustedJudgeWindows.good) judgeType = 'good'
 
     data.activeNotes[index].hit = true
     data.activeNotes[index].judgeType = judgeType
@@ -655,8 +666,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
         const activeData = gameDataRef.current
 
+        const adjustedMissWindow = JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
         activeData.activeNotes.forEach(note => {
-          if (!note.hit && !note.missed && note.time + JUDGE_WINDOWS.miss < now) {
+          if (!note.hit && !note.missed && note.time + adjustedMissWindow < now) {
             note.missed = true
             comboRef.current = 0
             setCombo(0)
@@ -723,6 +735,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     shouldReplayNote,
     addToReplayQueue,
     isPracticeMode,
+    isTutorialMode,
+    tutorialPlaybackSpeed,
+    tutorialJudgeMultiplier,
     barDuration
   ])
 
@@ -881,6 +896,55 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
               🔄 循环 x{loopCountRef.current}
             </span>
           )}
+        </div>
+      )}
+
+      {isTutorialMode && (
+        <div style={styles.tutorialIndicator}>
+          <span style={styles.tutorialIcon}>🎓</span>
+          <span style={styles.tutorialText}>教学模式</span>
+          <span style={styles.tutorialSpeedBadge}>{tutorialPlaybackSpeed}x 速度</span>
+          <span style={styles.tutorialJudgeBadge}>判定窗口 +50%</span>
+        </div>
+      )}
+
+      {isTutorialMode && gameState === 'ready' && (
+        <div style={styles.tutorialReadyOverlay}>
+          <div style={styles.tutorialReadyContent}>
+            <div style={styles.tutorialReadyIcon}>🎵</div>
+            <h2 style={styles.tutorialReadyTitle}>教学模式已准备就绪</h2>
+            <p style={styles.tutorialReadyDesc}>
+              准备好了吗？按任意键或点击下方按钮开始练习
+            </p>
+            <div style={styles.tutorialKeyHints}>
+              {keyConfig.labels.map((label, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.tutorialKeyHint,
+                    borderColor: keyConfig.colors[i],
+                    color: keyConfig.colors[i]
+                  }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+            <button
+              style={styles.tutorialStartBtn}
+              onClick={handleStartClick}
+            >
+              ▶ 开始练习
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isTutorialMode && gameState === 'playing' && (
+        <div style={styles.tutorialHint}>
+          <span style={styles.tutorialHintText}>
+            💡 当音符到达判定线时，按下对应按键！
+          </span>
         </div>
       )}
 
@@ -1379,5 +1443,132 @@ const styles = {
     fontWeight: 700,
     letterSpacing: '2px',
     cursor: 'pointer'
+  },
+  tutorialIndicator: {
+    position: 'absolute',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 20px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.2), rgba(255,153,0,0.15))',
+    border: '1px solid rgba(255,204,0,0.4)',
+    borderRadius: '12px',
+    zIndex: 20,
+    backdropFilter: 'blur(10px)'
+  },
+  tutorialIcon: {
+    fontSize: '20px'
+  },
+  tutorialText: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#ffcc00',
+    letterSpacing: '1px'
+  },
+  tutorialSpeedBadge: {
+    padding: '4px 10px',
+    background: 'rgba(0,255,204,0.15)',
+    border: '1px solid rgba(0,255,204,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#00ffcc',
+    fontWeight: 600
+  },
+  tutorialJudgeBadge: {
+    padding: '4px 10px',
+    background: 'rgba(102,153,255,0.15)',
+    border: '1px solid rgba(102,153,255,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#6699ff',
+    fontWeight: 600
+  },
+  tutorialReadyOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(5,5,8,0.9)',
+    zIndex: 60,
+    backdropFilter: 'blur(15px)'
+  },
+  tutorialReadyContent: {
+    textAlign: 'center',
+    padding: '48px 60px',
+    background: 'linear-gradient(135deg, rgba(15,15,30,0.98), rgba(10,10,20,0.95))',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '24px',
+    boxShadow: '0 20px 80px rgba(255,204,0,0.15)'
+  },
+  tutorialReadyIcon: {
+    fontSize: '64px',
+    marginBottom: '16px',
+    animation: 'bounce 1s ease-in-out infinite'
+  },
+  tutorialReadyTitle: {
+    fontSize: '28px',
+    fontWeight: 800,
+    letterSpacing: '4px',
+    margin: '0 0 12px 0',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff9900 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  tutorialReadyDesc: {
+    fontSize: '14px',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: '24px'
+  },
+  tutorialKeyHints: {
+    display: 'flex',
+    gap: '12px',
+    justifyContent: 'center',
+    marginBottom: '28px'
+  },
+  tutorialKeyHint: {
+    width: '56px',
+    height: '56px',
+    border: '2px solid',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '22px',
+    fontWeight: 800,
+    background: 'rgba(0,0,0,0.3)'
+  },
+  tutorialStartBtn: {
+    padding: '16px 48px',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff9900 100%)',
+    border: 'none',
+    borderRadius: '12px',
+    color: '#332200',
+    fontSize: '16px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    boxShadow: '0 8px 30px rgba(255,204,0,0.4)',
+    transition: 'all 0.2s'
+  },
+  tutorialHint: {
+    position: 'absolute',
+    bottom: '120px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 15
+  },
+  tutorialHintText: {
+    padding: '10px 20px',
+    background: 'rgba(0,0,0,0.7)',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '20px',
+    fontSize: '13px',
+    color: '#ffcc00',
+    backdropFilter: 'blur(10px)',
+    animation: 'pulse 2s ease-in-out infinite'
   }
 }
