@@ -9,6 +9,7 @@ import {
   EXP_RANK_BONUS,
   ACHIEVEMENTS,
   TITLES,
+  BADGES,
   DIFFICULTY_WEIGHT
 } from '../data/growthData.js'
 import {
@@ -17,10 +18,20 @@ import {
   resetTutorial,
   TUTORIAL_STEPS
 } from '../data/tutorialData.js'
+import {
+  getAllTasks,
+  getActiveActivities,
+  CHALLENGE_TASK_TYPES,
+  REWARD_TYPES,
+  EVENT_TITLES,
+  EVENT_ACHIEVEMENTS,
+  EVENT_BADGES
+} from '../data/challengeData.js'
 
 const STORAGE_KEY = 'rhythm_circle_player_data'
 const BEST_RECORDS_KEY = 'rhythm_circle_best_records'
 const HISTORY_KEY = 'rhythm_circle_history'
+const CHALLENGE_KEY = 'rhythm_circle_challenge_data'
 const REPLAYS_KEY = 'rhythm_circle_replays'
 const MAX_HISTORY_PER_TRACK = 20
 const MAX_REPLAYS_PER_TRACK = 5
@@ -59,6 +70,7 @@ const defaultPlayerData = {
   trackRecords: [],
   unlockedAchievements: [],
   unlockedTitles: [],
+  unlockedBadges: [],
   currentTitle: null,
   firstPlayDate: null,
   lastPlayDate: null
@@ -84,8 +96,39 @@ export function usePlayerStore() {
   const [newlyUnlocked, setNewlyUnlocked] = useState({
     achievements: [],
     titles: [],
+    badges: [],
     levelUps: []
   })
+
+  const getTodayKey = () => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  }
+
+  const getWeekKey = () => {
+    const now = new Date()
+    const onejan = new Date(now.getFullYear(), 0, 1)
+    const week = Math.ceil((((now - onejan) / 86400000) + onejan.getDay() + 1) / 7)
+    return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`
+  }
+
+  const defaultChallengeData = {
+    lastDailyReset: getTodayKey(),
+    lastWeeklyReset: getWeekKey(),
+    taskProgress: {},
+    claimedRewards: {},
+    unlockedEventTitles: [],
+    unlockedEventAchievements: [],
+    unlockedBadges: [],
+    activeMultipliers: [],
+    newlyCompletedTasks: []
+  }
+
+  const [challengeData, setChallengeData] = useState(() => {
+    return { ...defaultChallengeData, ...loadFromStorage(CHALLENGE_KEY, {}) }
+  })
+
+  const [newChallengeRewards, setNewChallengeRewards] = useState([])
 
   const [tutorialState, setTutorialState] = useState(() => ({
     showTutorial: !isTutorialCompleted(),
@@ -110,6 +153,56 @@ export function usePlayerStore() {
   useEffect(() => {
     saveToStorage(REPLAYS_KEY, replays)
   }, [replays])
+
+  useEffect(() => {
+    saveToStorage(CHALLENGE_KEY, challengeData)
+  }, [challengeData])
+
+  const checkAndResetPeriods = useCallback(() => {
+    const todayKey = getTodayKey()
+    const weekKey = getWeekKey()
+    const allTasks = getAllTasks()
+    let needsUpdate = false
+    const newTaskProgress = { ...challengeData.taskProgress }
+    const newClaimed = { ...challengeData.claimedRewards }
+
+    if (challengeData.lastDailyReset !== todayKey) {
+      allTasks.filter(t => t.period === 'daily').forEach(t => {
+        delete newTaskProgress[t.id]
+        delete newClaimed[t.id]
+      })
+      needsUpdate = true
+    }
+
+    if (challengeData.lastWeeklyReset !== weekKey) {
+      allTasks.filter(t => t.period === 'weekly').forEach(t => {
+        delete newTaskProgress[t.id]
+        delete newClaimed[t.id]
+      })
+      needsUpdate = true
+    }
+
+    const activeActivities = getActiveActivities()
+    const activeActivityIds = activeActivities.map(a => a.id)
+    allTasks.filter(t => t.period === 'event').forEach(t => {
+      if (t.activityId && !activeActivityIds.includes(t.activityId)) {
+        delete newTaskProgress[t.id]
+        delete newClaimed[t.id]
+        needsUpdate = true
+      }
+    })
+
+    if (needsUpdate) {
+      setChallengeData(prev => ({
+        ...prev,
+        lastDailyReset: todayKey,
+        lastWeeklyReset: weekKey,
+        taskProgress: newTaskProgress,
+        claimedRewards: newClaimed,
+        newlyCompletedTasks: []
+      }))
+    }
+  }, [challengeData])
 
   const expToNextLevel = useMemo(() => {
     return LEVEL_CURVE[playerData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]
@@ -165,6 +258,18 @@ export function usePlayerStore() {
       if (!data.unlockedTitles.includes(title.id)) {
         if (title.check(data)) {
           unlocked.push(title)
+        }
+      }
+    })
+    return unlocked
+  }, [])
+
+  const checkBadges = useCallback((data, records) => {
+    const unlocked = []
+    BADGES.forEach(badge => {
+      if (!data.unlockedBadges.includes(badge.id)) {
+        if (badge.check(data, records)) {
+          unlocked.push(badge)
         }
       }
     })
@@ -276,8 +381,308 @@ export function usePlayerStore() {
     return historyEntry
   }, [])
 
+  const getActiveMultiplier = useCallback(() => {
+    const now = Date.now()
+    const valid = challengeData.activeMultipliers.filter(m => m.expireAt > now)
+    if (valid.length === 0) return 1.0
+    return valid.reduce((max, m) => Math.max(max, m.value), 1.0)
+  }, [challengeData.activeMultipliers])
+
+  const updateChallengeProgress = useCallback((result, track) => {
+    checkAndResetPeriods()
+
+    const allTasks = getAllTasks()
+    const activeActivities = getActiveActivities()
+    const activeActivityIds = activeActivities.map(a => a.id)
+    const activeTasks = allTasks.filter(t => {
+      if (!t.activityId) return true
+      return activeActivityIds.includes(t.activityId)
+    })
+
+    const newProgress = { ...challengeData.taskProgress }
+    const newlyCompleted = []
+
+    activeTasks.forEach(task => {
+      let currentProgress = newProgress[task.id] || 0
+      const target = task.target
+      let taskCompleted = false
+
+      switch (task.type) {
+        case CHALLENGE_TASK_TYPES.PLAY_COUNT: {
+          if (!task.limitedTracksOnly || 
+              (task.activityId && activeActivities.find(a => a.id === task.activityId)?.limitedTracks?.includes(track.id))) {
+            currentProgress += 1
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.CLEAR_COUNT: {
+          if (result.cleared) {
+            if (!task.limitedTracksOnly || 
+                (task.activityId && activeActivities.find(a => a.id === task.activityId)?.limitedTracks?.includes(track.id))) {
+              currentProgress += 1
+            }
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.DIFFICULTY_CLEAR: {
+          if (result.cleared && task.difficulty?.includes(track.difficulty)) {
+            currentProgress += 1
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.TARGET_SCORE: {
+          if (task.trackId) {
+            if (track.id === task.trackId && result.score >= task.minScore) {
+              currentProgress = 1
+            }
+          } else if (result.score >= target) {
+            currentProgress = Math.max(currentProgress, result.score)
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.TARGET_ACCURACY: {
+          if (!task.limitedTracksOnly || 
+              (task.activityId && activeActivities.find(a => a.id === task.activityId)?.limitedTracks?.includes(track.id))) {
+            if (result.accuracy >= task.minAccuracy) {
+              currentProgress = 1
+            }
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.TARGET_COMBO: {
+          if (result.maxCombo >= target) {
+            currentProgress = Math.max(currentProgress, result.maxCombo)
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.PERFECT_COUNT: {
+          currentProgress += result.stats.perfect
+          break
+        }
+        case CHALLENGE_TASK_TYPES.SPECIFIC_TRACK: {
+          if (task.countPlays) {
+            const activity = activeActivities.find(a => a.id === task.activityId)
+            if (!activity?.limitedTracks || activity.limitedTracks.includes(track.id)) {
+              currentProgress += 1
+            }
+          } else if (task.trackId && track.id === task.trackId) {
+            if (task.minScore && result.score >= task.minScore && result.cleared) {
+              currentProgress = 1
+            } else if (!task.minScore && result.cleared) {
+              currentProgress = 1
+            }
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.NO_MISS: {
+          if ((!task.trackId || track.id === task.trackId) && result.cleared && result.stats.miss === 0) {
+            currentProgress = 1
+          }
+          break
+        }
+        case CHALLENGE_TASK_TYPES.RANK_ACHIEVE: {
+          if (result.cleared && task.rank?.includes(result.rank)) {
+            currentProgress += 1
+          }
+          break
+        }
+        default:
+          break
+      }
+
+      newProgress[task.id] = Math.min(currentProgress, target)
+      
+      const wasCompleted = challengeData.taskProgress[task.id] >= target
+      const isCompleted = newProgress[task.id] >= target
+      
+      if (isCompleted && !wasCompleted) {
+        newlyCompleted.push(task.id)
+      }
+    })
+
+    if (newlyCompleted.length > 0) {
+      setChallengeData(prev => ({
+        ...prev,
+        taskProgress: newProgress,
+        newlyCompletedTasks: [...(prev.newlyCompletedTasks || []), ...newlyCompleted]
+      }))
+    } else if (Object.keys(newProgress).some(k => newProgress[k] !== challengeData.taskProgress[k])) {
+      setChallengeData(prev => ({
+        ...prev,
+        taskProgress: newProgress
+      }))
+    }
+
+    return newlyCompleted
+  }, [challengeData, checkAndResetPeriods])
+
+  const claimTaskReward = useCallback((taskId) => {
+    const allTasks = getAllTasks()
+    const task = allTasks.find(t => t.id === taskId)
+    if (!task) return { success: false, rewards: [] }
+
+    const progress = challengeData.taskProgress[taskId] || 0
+    if (progress < task.target) return { success: false, rewards: [] }
+    if (challengeData.claimedRewards[taskId]) return { success: false, rewards: [] }
+
+    const claimedRewards = { ...challengeData.claimedRewards, [taskId]: true }
+    const rewardsToGive = []
+    const newEventTitles = [...challengeData.unlockedEventTitles]
+    const newEventAchievements = [...challengeData.unlockedEventAchievements]
+    const newBadges = [...challengeData.unlockedBadges]
+    const newMultipliers = [...challengeData.activeMultipliers.filter(m => m.expireAt > Date.now())]
+    let bonusExp = 0
+
+    task.rewards.forEach(reward => {
+      switch (reward.type) {
+        case REWARD_TYPES.EXP_BONUS:
+          bonusExp += reward.value
+          rewardsToGive.push({ type: 'exp', value: reward.value })
+          break
+        case REWARD_TYPES.TITLE:
+          if (!newEventTitles.includes(reward.value)) {
+            newEventTitles.push(reward.value)
+            const titleData = EVENT_TITLES[reward.value]
+            rewardsToGive.push({ type: 'title', data: titleData })
+          }
+          break
+        case REWARD_TYPES.ACHIEVEMENT:
+          if (!newEventAchievements.includes(reward.value)) {
+            newEventAchievements.push(reward.value)
+            const achData = EVENT_ACHIEVEMENTS[reward.value]
+            rewardsToGive.push({ type: 'achievement', data: achData })
+          }
+          break
+        case REWARD_TYPES.BADGE:
+          if (!newBadges.includes(reward.value)) {
+            newBadges.push(reward.value)
+            const badgeData = EVENT_BADGES[reward.value]
+            rewardsToGive.push({ type: 'badge', data: badgeData })
+          }
+          break
+        case REWARD_TYPES.MULTIPLIER:
+          newMultipliers.push({
+            value: reward.value,
+            expireAt: Date.now() + reward.duration,
+            source: taskId
+          })
+          rewardsToGive.push({ type: 'multiplier', value: reward.value, duration: reward.duration })
+          break
+        default:
+          break
+      }
+    })
+
+    setChallengeData(prev => ({
+      ...prev,
+      claimedRewards,
+      unlockedEventTitles: newEventTitles,
+      unlockedEventAchievements: newEventAchievements,
+      unlockedBadges: newBadges,
+      activeMultipliers: newMultipliers,
+      newlyCompletedTasks: prev.newlyCompletedTasks.filter(id => id !== taskId)
+    }))
+
+    if (bonusExp > 0) {
+      setPlayerData(prev => {
+        let nextData = { ...prev }
+        nextData.totalExp += bonusExp
+        nextData.exp += bonusExp
+
+        const levelUps = []
+        while (nextData.exp >= (LEVEL_CURVE[nextData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]) && nextData.level < 100) {
+          nextData.exp -= LEVEL_CURVE[nextData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]
+          nextData.level += 1
+          levelUps.push(nextData.level)
+        }
+
+        if (levelUps.length > 0) {
+          setNewlyUnlocked(prev2 => ({
+            ...prev2,
+            levelUps: [...prev2.levelUps, ...levelUps]
+          }))
+        }
+
+        return nextData
+      })
+    }
+
+    setNewChallengeRewards(prev => [...prev, ...rewardsToGive])
+    return { success: true, rewards: rewardsToGive }
+  }, [challengeData])
+
+  const getChallengeSummary = useCallback(() => {
+    checkAndResetPeriods()
+    const allTasks = getAllTasks()
+    const activeActivities = getActiveActivities()
+    const activeActivityIds = activeActivities.map(a => a.id)
+    const activeTasks = allTasks.filter(t => !t.activityId || activeActivityIds.includes(t.activityId))
+
+    let totalTasks = activeTasks.length
+    let completedTasks = 0
+    let claimedTasks = 0
+    let pendingClaim = 0
+
+    activeTasks.forEach(task => {
+      const progress = challengeData.taskProgress[task.id] || 0
+      if (progress >= task.target) {
+        completedTasks += 1
+        if (challengeData.claimedRewards[task.id]) {
+          claimedTasks += 1
+        } else {
+          pendingClaim += 1
+        }
+      }
+    })
+
+    return {
+      totalTasks,
+      completedTasks,
+      claimedTasks,
+      pendingClaim,
+      progressPercent: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
+      hasNewlyCompleted: challengeData.newlyCompletedTasks?.length > 0 || pendingClaim > 0
+    }
+  }, [challengeData, checkAndResetPeriods])
+
+  const getTaskStatus = useCallback((taskId) => {
+    const allTasks = getAllTasks()
+    const task = allTasks.find(t => t.id === taskId)
+    if (!task) return null
+
+    const progress = challengeData.taskProgress[taskId] || 0
+    const isCompleted = progress >= task.target
+    const isClaimed = !!challengeData.claimedRewards[taskId]
+    const isNewlyCompleted = challengeData.newlyCompletedTasks?.includes(taskId)
+
+    return {
+      task,
+      progress,
+      target: task.target,
+      percent: Math.min(100, (progress / task.target) * 100),
+      isCompleted,
+      isClaimed,
+      isNewlyCompleted
+    }
+  }, [challengeData])
+
+  const clearNewChallengeRewards = useCallback(() => {
+    setNewChallengeRewards([])
+  }, [])
+
+  const getEventTitles = useCallback(() => {
+    return challengeData.unlockedEventTitles.map(id => EVENT_TITLES[id]).filter(Boolean)
+  }, [challengeData.unlockedEventTitles])
+
+  const getEventAchievements = useCallback(() => {
+    return challengeData.unlockedEventAchievements.map(id => EVENT_ACHIEVEMENTS[id]).filter(Boolean)
+  }, [challengeData.unlockedEventAchievements])
+
   const processGameResult = useCallback((result, track) => {
-    const gainedExp = calculateGainedExp(result, track)
+    const newlyCompleted = updateChallengeProgress(result, track)
+    const multiplier = getActiveMultiplier()
+    const baseExp = calculateGainedExp(result, track)
+    const gainedExp = Math.floor(baseExp * multiplier)
     const levelUps = []
 
     let nextData = { ...playerData }
@@ -300,6 +705,33 @@ export function usePlayerStore() {
 
     const recordChecks = updateBestRecord(result, track)
     addToHistory(result, track)
+
+    const recordKey = `${track.id}_${track.difficulty}`
+    let updatedBestRecords = { ...bestRecords }
+    if (result.cleared) {
+      const existing = bestRecords[recordKey]
+      const hasNew = !existing || recordChecks.isNewBest || recordChecks.isNewAccuracy || recordChecks.isNewCombo
+      if (hasNew) {
+        updatedBestRecords = {
+          ...updatedBestRecords,
+          [recordKey]: {
+            trackId: track.id,
+            trackTitle: track.title,
+            difficulty: track.difficulty,
+            level: track.level,
+            artist: track.artist,
+            score: existing && !recordChecks.isNewBest ? existing.score : result.score,
+            rank: existing && !recordChecks.isNewBest ? existing.rank : result.rank,
+            accuracy: existing && !recordChecks.isNewAccuracy ? existing.accuracy : result.accuracy,
+            maxCombo: existing && !recordChecks.isNewCombo ? existing.maxCombo : result.maxCombo,
+            stats: existing && !recordChecks.isNewBest ? existing.stats : { ...result.stats },
+            totalNotes: existing && !recordChecks.isNewBest ? existing.totalNotes : result.totalNotes,
+            cleared: true,
+            updatedAt: new Date().toISOString()
+          }
+        }
+      }
+    }
 
     const record = {
       id: Date.now(),
@@ -345,10 +777,19 @@ export function usePlayerStore() {
       ]
     }
 
+    const newBadges = checkBadges(nextData, updatedBestRecords)
+    if (newBadges.length > 0) {
+      nextData.unlockedBadges = [
+        ...nextData.unlockedBadges,
+        ...newBadges.map(b => b.id)
+      ]
+    }
+
     setPlayerData(nextData)
     setNewlyUnlocked({
       achievements: newAchievements,
       titles: newTitles,
+      badges: newBadges,
       levelUps
     })
 
@@ -357,9 +798,13 @@ export function usePlayerStore() {
       levelUps, 
       newAchievements, 
       newTitles,
-      recordChecks 
+      newBadges,
+      recordChecks,
+      newlyCompletedTasks: newlyCompleted,
+      expMultiplier: multiplier,
+      baseExp
     }
-  }, [playerData, calculateGainedExp, checkAchievements, checkTitles, updateBestRecord, addToHistory])
+  }, [playerData, bestRecords, calculateGainedExp, checkAchievements, checkTitles, checkBadges, updateBestRecord, addToHistory, updateChallengeProgress, getActiveMultiplier])
 
   const getBestRecord = useCallback((trackId, difficulty = null) => {
     if (difficulty) {
@@ -526,6 +971,7 @@ export function usePlayerStore() {
     setNewlyUnlocked({
       achievements: [],
       titles: [],
+      badges: [],
       levelUps: []
     })
   }, [])
@@ -629,7 +1075,9 @@ export function usePlayerStore() {
       setBestRecords({})
       setPlayHistory([])
       setReplays([])
-      setNewlyUnlocked({ achievements: [], titles: [], levelUps: [] })
+      setNewlyUnlocked({ achievements: [], titles: [], badges: [], levelUps: [] })
+      setChallengeData({ ...defaultChallengeData })
+      setNewChallengeRewards([])
       resetTutorial()
       setTutorialState({
         showTutorial: true,
@@ -640,9 +1088,20 @@ export function usePlayerStore() {
       })
       localStorage.removeItem(BEST_RECORDS_KEY)
       localStorage.removeItem(HISTORY_KEY)
+      localStorage.removeItem(CHALLENGE_KEY)
       localStorage.removeItem(REPLAYS_KEY)
     }
   }, [])
+
+  const getBadgeStats = useCallback(() => {
+    const total = BADGES.length
+    const unlocked = playerData.unlockedBadges.length
+    return {
+      total,
+      unlocked,
+      percent: total > 0 ? Math.round((unlocked / total) * 100) : 0
+    }
+  }, [playerData.unlockedBadges])
 
   return {
     playerData,
@@ -653,6 +1112,8 @@ export function usePlayerStore() {
     playHistory,
     replays,
     tutorialState,
+    challengeData,
+    newChallengeRewards,
     processGameResult,
     getBestRecord,
     checkIsNewRecord,
@@ -675,6 +1136,15 @@ export function usePlayerStore() {
     hideTutorial,
     showTutorial,
     resetTutorialProgress,
-    resetTutorialState
+    resetTutorialState,
+    claimTaskReward,
+    getChallengeSummary,
+    getTaskStatus,
+    clearNewChallengeRewards,
+    getEventTitles,
+    getEventAchievements,
+    getActiveMultiplier,
+    getBadgeStats,
+    checkBadges
   }
 }
