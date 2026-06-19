@@ -18,7 +18,8 @@ export default function TrackSelect({
   onOpenChallengeCenter,
   activeMultiplier,
   bestRecords,
-  onOpenCalibrationCenter
+  onOpenCalibrationCenter,
+  onOpenThemeWorkshop
 }) {
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
@@ -275,6 +276,9 @@ export default function TrackSelect({
           </button>
           <button style={styles.calibrationBtn} onClick={onOpenCalibrationCenter}>
             🎯 校准中心
+          </button>
+          <button style={styles.themeBtn} onClick={onOpenThemeWorkshop}>
+            🎨 主题工坊
           </button>
         </div>
       </div>
@@ -912,6 +916,18 @@ const styles = {
     background: 'linear-gradient(135deg, rgba(0,255,204,0.15), rgba(0,204,170,0.1))',
     border: '1px solid rgba(0,255,204,0.3)',
     color: '#00ffcc',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+    backdropFilter: 'blur(10px)',
+    transition: 'all 0.2s'
+  },
+  themeBtn: {
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.15), rgba(204,102,255,0.1))',
+    border: '1px solid rgba(255,51,102,0.3)',
+    color: '#ff3366',
     padding: '10px 20px',
     borderRadius: '8px',
     cursor: 'pointer',

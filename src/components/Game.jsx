@@ -26,7 +26,7 @@ const JUDGE_RANK = {
   miss: 1
 }
 
-export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false }) {
+export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, theme }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
   const calibrationStore = useCalibrationStore()
@@ -980,6 +980,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         analyser={toneRef.current.analyser}
         judgeFeedback={judgeFeedback}
         practiceRange={range}
+        theme={theme}
       />
 
       <ScorePanel

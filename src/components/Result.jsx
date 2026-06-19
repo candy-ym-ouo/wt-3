@@ -26,8 +26,10 @@ export default function Result({
   replayData,
   getReplayAnalysis,
   trackReplays,
-  onDeleteReplay
+  onDeleteReplay,
+  theme
 }) {
+  const resultStyle = theme?.resultStyleId || 'neon'
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
     perfect: 0,
@@ -143,46 +145,90 @@ export default function Result({
       const cx = w / 2
       const cy = h / 2
 
-      for (let ring = 0; ring < 5; ring++) {
-        const r = 60 + ring * 25 + Math.sin(t * 0.5 + ring) * 5
-        ctx.beginPath()
-        const alpha = Math.floor((0.1 + Math.sin(t + ring) * 0.1) * 255).toString(16).padStart(2, '0')
-        ctx.strokeStyle = `${colors[0]}${alpha}`
-        ctx.lineWidth = 1.5
-        for (let i = 0; i <= Math.PI * 2; i += 0.02) {
-          const noise = Math.sin(i * 8 + t * 2 + ring) * 6
-          const x = cx + Math.cos(i) * (r + noise)
-          const y = cy + Math.sin(i) * (r + noise)
-          if (i === 0) ctx.moveTo(x, y)
-          else ctx.lineTo(x, y)
+      if (resultStyle === 'neon') {
+        for (let ring = 0; ring < 5; ring++) {
+          const r = 60 + ring * 25 + Math.sin(t * 0.5 + ring) * 5
+          ctx.beginPath()
+          const alpha = Math.floor((0.1 + Math.sin(t + ring) * 0.1) * 255).toString(16).padStart(2, '0')
+          ctx.strokeStyle = `${colors[0]}${alpha}`
+          ctx.lineWidth = 1.5
+          for (let i = 0; i <= Math.PI * 2; i += 0.02) {
+            const noise = Math.sin(i * 8 + t * 2 + ring) * 6
+            const x = cx + Math.cos(i) * (r + noise)
+            const y = cy + Math.sin(i) * (r + noise)
+            if (i === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+          }
+          ctx.stroke()
         }
-        ctx.stroke()
-      }
 
-      for (let i = 0; i < 30; i++) {
-        const ang = (i / 30) * Math.PI * 2 + t * 0.3
-        const dist = 50 + (i % 4) * 25 + Math.sin(t + i) * 15
-        const x = cx + Math.cos(ang) * dist
-        const y = cy + Math.sin(ang) * dist
-        ctx.fillStyle = `${colors[i % 3]}88`
-        ctx.beginPath()
-        ctx.arc(x, y, 1.5 + Math.sin(t * 2 + i) * 0.8, 0, Math.PI * 2)
-        ctx.fill()
-      }
+        for (let i = 0; i < 30; i++) {
+          const ang = (i / 30) * Math.PI * 2 + t * 0.3
+          const dist = 50 + (i % 4) * 25 + Math.sin(t + i) * 15
+          const x = cx + Math.cos(ang) * dist
+          const y = cy + Math.sin(ang) * dist
+          ctx.fillStyle = `${colors[i % 3]}88`
+          ctx.beginPath()
+          ctx.arc(x, y, 1.5 + Math.sin(t * 2 + i) * 0.8, 0, Math.PI * 2)
+          ctx.fill()
+        }
 
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 100)
-      grad.addColorStop(0, `${colors[0]}44`)
-      grad.addColorStop(0.5, `${colors[1]}22`)
-      grad.addColorStop(1, 'transparent')
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, w, h)
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 100)
+        grad.addColorStop(0, `${colors[0]}44`)
+        grad.addColorStop(0.5, `${colors[1]}22`)
+        grad.addColorStop(1, 'transparent')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
+      } else if (resultStyle === 'minimal') {
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.4)
+        grad.addColorStop(0, 'rgba(255,255,255,0.02)')
+        grad.addColorStop(1, 'transparent')
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
+      } else if (resultStyle === 'gradient') {
+        const grad = ctx.createLinearGradient(0, 0, w, h)
+        const offset = t * 0.1
+        grad.addColorStop(0, `${colors[0]}22`)
+        grad.addColorStop((0.3 + Math.sin(offset) * 0.2) % 1, `${colors[1]}15`)
+        grad.addColorStop((0.6 + Math.cos(offset) * 0.2) % 1, `${colors[2]}18`)
+        grad.addColorStop(1, `${colors[0]}22`)
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
+
+        for (let i = 0; i < 20; i++) {
+          const ang = (i / 20) * Math.PI * 2 + t * 0.2
+          const dist = 40 + (i % 4) * 20
+          const x = cx + Math.cos(ang) * dist
+          const y = cy + Math.sin(ang) * dist
+          ctx.fillStyle = `${colors[i % 3]}44`
+          ctx.beginPath()
+          ctx.arc(x, y, 1 + Math.sin(t + i) * 0.5, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      } else if (resultStyle === 'retro') {
+        for (let y = 0; y < h; y += 3) {
+          ctx.fillStyle = 'rgba(0,0,0,0.2)'
+          ctx.fillRect(0, y, w, 1)
+        }
+        const scanY = (t * 40) % h
+        const scanGrad = ctx.createLinearGradient(0, scanY - 15, 0, scanY + 15)
+        scanGrad.addColorStop(0, 'transparent')
+        scanGrad.addColorStop(0.5, `${colors[0]}15`)
+        scanGrad.addColorStop(1, 'transparent')
+        ctx.fillStyle = scanGrad
+        ctx.fillRect(0, scanY - 15, w, 30)
+
+        ctx.strokeStyle = `${colors[0]}20`
+        ctx.lineWidth = 1
+        ctx.strokeRect(cx - 50, cy - 50, 100, 100)
+      }
 
       animRef.current = requestAnimationFrame(draw)
     }
     draw()
 
     return () => cancelAnimationFrame(animRef.current)
-  }, [result.rank])
+  }, [result.rank, resultStyle])
 
   const totalNotes = result.totalNotes
   const hitNotes = result.stats.perfect + result.stats.great + result.stats.good

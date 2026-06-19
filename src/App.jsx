@@ -12,7 +12,9 @@ import { defaultKeyConfig, tracks } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
 import { useCalibrationStore } from './store/useCalibrationStore.js'
+import { useThemeStore } from './store/useThemeStore.js'
 import CalibrationCenter from './components/CalibrationCenter.jsx'
+import ThemeWorkshop from './components/ThemeWorkshop.jsx'
 
 export default function App() {
   const [screen, setScreen] = useState('select')
@@ -31,8 +33,15 @@ export default function App() {
   const [isTutorialGame, setIsTutorialGame] = useState(false)
   const [showTutorialComplete, setShowTutorialComplete] = useState(false)
   const [showCalibrationCenter, setShowCalibrationCenter] = useState(false)
+  const [showThemeWorkshop, setShowThemeWorkshop] = useState(false)
 
   const calibrationStore = useCalibrationStore()
+  const themeStore = useThemeStore()
+
+  const themedKeyConfig = useMemo(() => ({
+    ...keyConfig,
+    colors: themeStore.getLaneColors()
+  }), [keyConfig, themeStore.theme.laneSchemeId])
 
   const playerStore = usePlayerStore()
   const {
@@ -221,7 +230,7 @@ export default function App() {
           onOpenEditor={() => handleOpenEditor(null)}
           onEditTrack={handleOpenEditor}
           onOpenPracticeLab={handleOpenPracticeLab}
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           playerData={playerStore.playerData}
           expProgress={playerStore.expProgress}
           onOpenGrowthCenter={() => setShowGrowthCenter(true)}
@@ -231,11 +240,12 @@ export default function App() {
           activeMultiplier={activeMultiplier}
           bestRecords={bestRecords}
           onOpenCalibrationCenter={() => setShowCalibrationCenter(true)}
+          onOpenThemeWorkshop={() => setShowThemeWorkshop(true)}
         />
       )}
       {screen === 'settings' && (
         <KeySettings
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           onSave={(config) => {
             setKeyConfig(config)
             setScreen('select')
@@ -246,7 +256,7 @@ export default function App() {
       {screen === 'practice' && selectedTrack && (
         <PracticeLab
           track={selectedTrack}
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           onStartPractice={handleStartPractice}
           onBack={() => setScreen('select')}
         />
@@ -254,7 +264,7 @@ export default function App() {
       {screen === 'editor' && (
         <Editor
           initialTrack={editingTrack}
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           onSave={handleSaveTrack}
           onChange={handleEditorChange}
           onBack={handleBackToSelect}
@@ -264,7 +274,7 @@ export default function App() {
       {screen === 'game' && selectedTrack && (
         <Game
           track={selectedTrack}
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           onEnd={handleGameEnd}
           onQuit={() => {
             if (isEditingMode) {
@@ -276,6 +286,7 @@ export default function App() {
           isPracticeMode={practiceSection !== null}
           practiceSection={practiceSection}
           isTutorialMode={isTutorialGame}
+          theme={themeStore.theme}
         />
       )}
       {screen === 'result' && gameResult && (
@@ -309,6 +320,7 @@ export default function App() {
           getReplayAnalysis={playerStore.getReplayAnalysis}
           trackReplays={playerStore.getTrackReplays(selectedTrack.id, selectedTrack.difficulty)}
           onDeleteReplay={playerStore.deleteReplay}
+          theme={themeStore.theme}
         />
       )}
       {showGrowthCenter && (
@@ -335,8 +347,14 @@ export default function App() {
       )}
       {showCalibrationCenter && (
         <CalibrationCenter
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           onClose={() => setShowCalibrationCenter(false)}
+        />
+      )}
+      {showThemeWorkshop && (
+        <ThemeWorkshop
+          keyConfig={themedKeyConfig}
+          onClose={() => setShowThemeWorkshop(false)}
         />
       )}
       {tutorialState.showTutorial && tutorialState.isInTutorialFlow && (
@@ -346,7 +364,7 @@ export default function App() {
           onSkip={handleTutorialSkip}
           onOpenKeySettings={handleOpenKeySettingsFromTutorial}
           onStartPractice={handleStartPracticeFromTutorial}
-          keyConfig={keyConfig}
+          keyConfig={themedKeyConfig}
           tracks={allTracks}
           onSelectTrack={handleTutorialTrackSelect}
           selectedTrackIndex={selectedTutorialTrackIndex}

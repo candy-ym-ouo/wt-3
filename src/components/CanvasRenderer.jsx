@@ -6,11 +6,15 @@ export default function CanvasRenderer({
   gameDataRef,
   currentTime,
   analyser,
-  judgeFeedback
+  judgeFeedback,
+  theme
 }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const timeRef = useRef(0)
+
+  const bgId = theme?.backgroundId || 'nebula'
+  const hitId = theme?.hitEffectId || 'rings'
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -46,7 +50,7 @@ export default function CanvasRenderer({
       return (width * (LANE_END - LANE_START) / LANE_COUNT) * 0.75
     }
 
-    const drawBackground = (t, waveData) => {
+    const drawBackgroundNebula = (t, waveData) => {
       const cx = width / 2
       const cy = height / 2
 
@@ -99,7 +103,209 @@ export default function CanvasRenderer({
       }
     }
 
+    const drawBackgroundGrid = (t, waveData) => {
+      const cx = width / 2
+      const cy = height / 2
+
+      ctx.fillStyle = '#050508'
+      ctx.fillRect(0, 0, width, height)
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.6)
+      grad.addColorStop(0, 'rgba(0,20,40,0.4)')
+      grad.addColorStop(1, 'transparent')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, width, height)
+
+      const gridSize = 40
+      const offsetX = (t * 15) % gridSize
+      const offsetY = (t * 20) % gridSize
+
+      ctx.strokeStyle = `${keyConfig.colors[2]}12`
+      ctx.lineWidth = 0.5
+      for (let x = -gridSize + offsetX; x < width + gridSize; x += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+        ctx.stroke()
+      }
+      for (let y = -gridSize + offsetY; y < height + gridSize; y += gridSize) {
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(width, y)
+        ctx.stroke()
+      }
+
+      const horizonY = height * 0.55
+      for (let i = -15; i <= 15; i++) {
+        ctx.beginPath()
+        ctx.strokeStyle = `${keyConfig.colors[Math.abs(i) % 4]}0a`
+        ctx.moveTo(cx, horizonY)
+        ctx.lineTo(cx + i * width * 0.1, height)
+        ctx.stroke()
+      }
+
+      for (let i = 0; i < 40; i++) {
+        const ang = (i / 40) * Math.PI * 2 + t * 0.15
+        const dist = 50 + (i % 6) * 30 + Math.sin(t * 0.5 + i) * 15
+        const x = cx + Math.cos(ang) * dist
+        const y = cy + Math.sin(ang) * dist
+        const alpha = 0.15 + Math.sin(t + i) * 0.1
+        const colorIdx = i % 4
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fillStyle = `${keyConfig.colors[colorIdx]}${alphaHex}`
+        ctx.beginPath()
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    const drawBackgroundRain = (t, waveData) => {
+      const cx = width / 2
+      const cy = height / 2
+
+      ctx.fillStyle = '#050508'
+      ctx.fillRect(0, 0, width, height)
+
+      const chars = '01アイウエオカキクケコサシスセソ'
+      ctx.font = '12px monospace'
+      for (let i = 0; i < 120; i++) {
+        const col = i % 30
+        const speed = 40 + (i % 5) * 15
+        const x = (col * (width / 30))
+        const baseY = (i * 47 + t * speed) % (height + 200) - 100
+        const colorIdx = col % 4
+        const alpha = 0.15 + Math.sin(t + i) * 0.08
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fillStyle = `${keyConfig.colors[colorIdx]}${alphaHex}`
+        ctx.fillText(chars[i % chars.length], x, baseY)
+        for (let j = 1; j < 8; j++) {
+          const trailAlpha = alpha * (1 - j * 0.12)
+          if (trailAlpha <= 0) break
+          const trailAlphaHex = Math.floor(trailAlpha * 255).toString(16).padStart(2, '0')
+          ctx.fillStyle = `${keyConfig.colors[colorIdx]}${trailAlphaHex}`
+          ctx.fillText(chars[(i + j * 3) % chars.length], x, baseY - j * 14)
+        }
+      }
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.3)
+      grad.addColorStop(0, `${keyConfig.colors[2]}08`)
+      grad.addColorStop(1, 'transparent')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, width, height)
+    }
+
+    const drawBackgroundAurora = (t, waveData) => {
+      ctx.fillStyle = '#050510'
+      ctx.fillRect(0, 0, width, height)
+
+      for (let band = 0; band < 5; band++) {
+        ctx.beginPath()
+        const baseY = height * (0.15 + band * 0.12)
+        for (let x = 0; x <= width; x += 3) {
+          const y = baseY
+            + Math.sin(x * 0.003 + t * (0.3 + band * 0.2) + band * 2) * 40
+            + Math.sin(x * 0.008 + t * 0.8 + band) * 15
+            + (waveData[Math.floor((x / width) * waveData.length)] || 0) * 20
+          if (x === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        }
+        const grad = ctx.createLinearGradient(0, baseY - 60, 0, baseY + 80)
+        const c = keyConfig.colors[band % 4]
+        grad.addColorStop(0, 'transparent')
+        grad.addColorStop(0.3, `${c}25`)
+        grad.addColorStop(0.6, `${c}12`)
+        grad.addColorStop(1, 'transparent')
+        ctx.lineTo(width, height)
+        ctx.lineTo(0, height)
+        ctx.closePath()
+        ctx.fillStyle = grad
+        ctx.fill()
+      }
+
+      for (let i = 0; i < 40; i++) {
+        const ang = (i / 40) * Math.PI * 2 + t * 0.1
+        const dist = 80 + (i % 5) * 30 + Math.sin(t * 0.4 + i) * 20
+        const x = width / 2 + Math.cos(ang) * dist
+        const y = height / 2 + Math.sin(ang) * dist
+        const alpha = 0.2 + Math.sin(t + i) * 0.1
+        const colorIdx = i % 4
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fillStyle = `${keyConfig.colors[colorIdx]}${alphaHex}`
+        ctx.beginPath()
+        ctx.arc(x, y, 1.5 + Math.sin(t * 2 + i) * 0.5, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    const drawBackgroundMinimal = (t, waveData) => {
+      ctx.fillStyle = '#080810'
+      ctx.fillRect(0, 0, width, height)
+
+      const cx = width / 2
+      const cy = height / 2
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 0.35)
+      grad.addColorStop(0, 'rgba(255,255,255,0.02)')
+      grad.addColorStop(1, 'transparent')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, width, height)
+
+      for (let i = 0; i < 20; i++) {
+        const ang = (i / 20) * Math.PI * 2 + t * 0.05
+        const dist = 100 + (i % 4) * 30
+        const x = cx + Math.cos(ang) * dist
+        const y = cy + Math.sin(ang) * dist
+        const alpha = 0.08 + Math.sin(t + i) * 0.04
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fillStyle = `${keyConfig.colors[i % 4]}${alphaHex}`
+        ctx.beginPath()
+        ctx.arc(x, y, 1, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
+    const drawBackgroundRetro = (t, waveData) => {
+      ctx.fillStyle = '#0a0a12'
+      ctx.fillRect(0, 0, width, height)
+
+      for (let y = 0; y < height; y += 3) {
+        ctx.fillStyle = 'rgba(0,0,0,0.15)'
+        ctx.fillRect(0, y, width, 1)
+      }
+
+      const scanY = (t * 60) % height
+      const scanGrad = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30)
+      scanGrad.addColorStop(0, 'transparent')
+      scanGrad.addColorStop(0.5, `${keyConfig.colors[0]}12`)
+      scanGrad.addColorStop(1, 'transparent')
+      ctx.fillStyle = scanGrad
+      ctx.fillRect(0, scanY - 30, width, 60)
+
+      for (let i = 0; i < 30; i++) {
+        const ang = (i / 30) * Math.PI * 2 + t * 0.1
+        const dist = 80 + (i % 5) * 25
+        const x = width / 2 + Math.cos(ang) * dist
+        const y = height / 2 + Math.sin(ang) * dist
+        const alpha = 0.2 + Math.sin(t * 2 + i) * 0.1
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+        ctx.fillStyle = `${keyConfig.colors[i % 4]}${alphaHex}`
+        ctx.fillRect(x - 2, y - 2, 4, 4)
+      }
+    }
+
+    const drawBackground = (t, waveData) => {
+      switch (bgId) {
+        case 'grid': drawBackgroundGrid(t, waveData); break
+        case 'rain': drawBackgroundRain(t, waveData); break
+        case 'aurora': drawBackgroundAurora(t, waveData); break
+        case 'minimal': drawBackgroundMinimal(t, waveData); break
+        case 'retro': drawBackgroundRetro(t, waveData); break
+        default: drawBackgroundNebula(t, waveData); break
+      }
+    }
+
     const drawWaveform = (t, waveData) => {
+      if (bgId === 'minimal') return
+
       const barCount = 128
       const barWidth = width / barCount
       const centerY = height / 2
@@ -124,6 +330,8 @@ export default function CanvasRenderer({
     }
 
     const drawBottomWave = (t, waveData) => {
+      if (bgId === 'minimal' || bgId === 'retro') return
+
       const bottomY = height - 100
       const waveWidth = width
       const waveHeight = 80
@@ -151,9 +359,9 @@ export default function CanvasRenderer({
 
       ctx.closePath()
       const grad = ctx.createLinearGradient(0, bottomY - waveHeight, 0, bottomY + waveHeight * 0.5)
-      grad.addColorStop(0, 'rgba(0, 255, 204, 0.0)')
-      grad.addColorStop(0.5, 'rgba(0, 255, 204, 0.2)')
-      grad.addColorStop(1, 'rgba(255, 51, 102, 0.1)')
+      grad.addColorStop(0, `${keyConfig.colors[2]}00`)
+      grad.addColorStop(0.5, `${keyConfig.colors[2]}33`)
+      grad.addColorStop(1, `${keyConfig.colors[0]}1a`)
       ctx.fillStyle = grad
       ctx.fill()
 
@@ -166,7 +374,7 @@ export default function CanvasRenderer({
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       }
-      ctx.strokeStyle = 'rgba(0, 255, 204, 0.6)'
+      ctx.strokeStyle = `${keyConfig.colors[2]}99`
       ctx.lineWidth = 2
       ctx.stroke()
     }
@@ -300,6 +508,189 @@ export default function CanvasRenderer({
       })
     }
 
+    const drawHitEffectRings = (effect, t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const age = time - effect.time
+      if (age > 0.6) return
+      const progress = age / 0.6
+      const x = getLaneX(effect.lane)
+      const y = hitY
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+      const color = judgeColors[effect.type]
+
+      if (effect.type !== 'miss') {
+        for (let ring = 0; ring < 4; ring++) {
+          const r = 15 + progress * (80 + ring * 25)
+          const ringAlpha = (1 - progress) * (1 - ring * 0.2)
+          const ringAlphaHex = Math.floor(ringAlpha * 255).toString(16).padStart(2, '0')
+          ctx.beginPath()
+          ctx.strokeStyle = `${color}${ringAlphaHex}`
+          ctx.lineWidth = 2.5 - ring * 0.5
+          ctx.arc(x, y, r, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+      }
+    }
+
+    const drawHitEffectSparks = (effect, t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const age = time - effect.time
+      if (age > 0.6) return
+      const progress = age / 0.6
+      const x = getLaneX(effect.lane)
+      const y = hitY
+      const alpha = 1 - progress
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+      const color = judgeColors[effect.type]
+
+      if (effect.type !== 'miss') {
+        const sparkCount = effect.type === 'perfect' ? 16 : effect.type === 'great' ? 10 : 6
+        for (let p = 0; p < sparkCount; p++) {
+          const angle = (p / sparkCount) * Math.PI * 2 + effect.lane * 0.8
+          const speed = 60 + Math.sin(p * 3.7) * 30
+          const dist = progress * speed
+          const px = x + Math.cos(angle) * dist
+          const py = y + Math.sin(angle) * dist - progress * 20
+          const sparkAlpha = alpha * (1 - p * 0.03)
+          const sparkAlphaHex = Math.floor(sparkAlpha * 255).toString(16).padStart(2, '0')
+          ctx.fillStyle = `${color}${sparkAlphaHex}`
+          ctx.beginPath()
+          ctx.arc(px, py, 3 * (1 - progress), 0, Math.PI * 2)
+          ctx.fill()
+
+          ctx.fillStyle = `rgba(255,255,255,${sparkAlpha * 0.5})`
+          ctx.beginPath()
+          ctx.arc(px, py, 1.2 * (1 - progress), 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+    }
+
+    const drawHitEffectWave = (effect, t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const age = time - effect.time
+      if (age > 0.6) return
+      const progress = age / 0.6
+      const x = getLaneX(effect.lane)
+      const y = hitY
+      const alpha = 1 - progress
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+      const color = judgeColors[effect.type]
+
+      if (effect.type !== 'miss') {
+        for (let wave = 0; wave < 3; wave++) {
+          const waveR = 10 + progress * (70 + wave * 20)
+          const waveW = 20 + wave * 10
+          const waveAlpha = alpha * (1 - wave * 0.25)
+          const waveAlphaHex = Math.floor(waveAlpha * 200).toString(16).padStart(2, '0')
+          ctx.beginPath()
+          ctx.strokeStyle = `${color}${waveAlphaHex}`
+          ctx.lineWidth = 2.5 - wave * 0.5
+          ctx.ellipse(x, y, waveR, waveW, 0, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+      }
+    }
+
+    const drawHitEffectDiamond = (effect, t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const age = time - effect.time
+      if (age > 0.6) return
+      const progress = age / 0.6
+      const x = getLaneX(effect.lane)
+      const y = hitY
+      const alpha = 1 - progress
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+      const color = judgeColors[effect.type]
+
+      if (effect.type !== 'miss') {
+        const diamondSize = 10 + progress * 50
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.rotate(progress * Math.PI * 0.5)
+        for (let d = 0; d < 3; d++) {
+          const ds = diamondSize + d * 12
+          const dAlpha = alpha * (1 - d * 0.3)
+          const dAlphaHex = Math.floor(dAlpha * 200).toString(16).padStart(2, '0')
+          ctx.beginPath()
+          ctx.strokeStyle = `${color}${dAlphaHex}`
+          ctx.lineWidth = 2.5 - d * 0.5
+          ctx.moveTo(0, -ds)
+          ctx.lineTo(ds * 0.6, 0)
+          ctx.lineTo(0, ds)
+          ctx.lineTo(-ds * 0.6, 0)
+          ctx.closePath()
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+    }
+
+    const drawHitEffectBloom = (effect, t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const age = time - effect.time
+      if (age > 0.6) return
+      const progress = age / 0.6
+      const x = getLaneX(effect.lane)
+      const y = hitY
+      const alpha = 1 - progress
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+      const color = judgeColors[effect.type]
+
+      if (effect.type !== 'miss') {
+        const petals = effect.type === 'perfect' ? 8 : effect.type === 'great' ? 6 : 4
+        const bloomR = 8 + progress * 45
+        const rot = progress * Math.PI * 0.4
+        ctx.save()
+        ctx.translate(x, y)
+        for (let p = 0; p < petals; p++) {
+          const angle = (p / petals) * Math.PI * 2 + rot
+          const px = Math.cos(angle) * bloomR
+          const py = Math.sin(angle) * bloomR
+          const petalAlpha = alpha * 0.7
+          const petalAlphaHex = Math.floor(petalAlpha * 255).toString(16).padStart(2, '0')
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, 10)
+          grad.addColorStop(0, `${color}${petalAlphaHex}`)
+          grad.addColorStop(1, `${color}00`)
+          ctx.fillStyle = grad
+          ctx.beginPath()
+          ctx.arc(px, py, 10 * (1 - progress * 0.4), 0, Math.PI * 2)
+          ctx.fill()
+        }
+        ctx.restore()
+      }
+    }
+
     const drawEffects = (t, time) => {
       const hitY = height * HIT_LINE_Y
 
@@ -320,32 +711,12 @@ export default function CanvasRenderer({
       })
 
       gameDataRef.current.hitEffects.forEach(effect => {
-        const age = time - effect.time
-        if (age > 0.6) return
-        const progress = age / 0.6
-        const x = getLaneX(effect.lane)
-        const y = hitY
-        const alpha = 1 - progress
-
-        const colors = {
-          perfect: '#ffcc00',
-          great: '#00ffcc',
-          good: '#6699ff',
-          miss: '#ff3366'
-        }
-        const color = colors[effect.type]
-
-        if (effect.type !== 'miss') {
-          for (let ring = 0; ring < 4; ring++) {
-            const r = 15 + progress * (80 + ring * 25)
-            const ringAlpha = (1 - progress) * (1 - ring * 0.2)
-            const ringAlphaHex = Math.floor(ringAlpha * 255).toString(16).padStart(2, '0')
-            ctx.beginPath()
-            ctx.strokeStyle = `${color}${ringAlphaHex}`
-            ctx.lineWidth = 2.5 - ring * 0.5
-            ctx.arc(x, y, r, 0, Math.PI * 2)
-            ctx.stroke()
-          }
+        switch (hitId) {
+          case 'sparks': drawHitEffectSparks(effect, t, time); break
+          case 'wave': drawHitEffectWave(effect, t, time); break
+          case 'diamond': drawHitEffectDiamond(effect, t, time); break
+          case 'bloom': drawHitEffectBloom(effect, t, time); break
+          default: drawHitEffectRings(effect, t, time); break
         }
       })
 
@@ -446,7 +817,7 @@ export default function CanvasRenderer({
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(animRef.current)
     }
-  }, [track, keyConfig, currentTime, analyser, judgeFeedback, gameDataRef])
+  }, [track, keyConfig, currentTime, analyser, judgeFeedback, gameDataRef, bgId, hitId])
 
   return (
     <canvas
