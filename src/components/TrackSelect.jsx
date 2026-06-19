@@ -7,6 +7,7 @@ export default function TrackSelect({
   onOpenSettings,
   onOpenEditor,
   onEditTrack,
+  onOpenPracticeLab,
   keyConfig,
   playerData,
   expProgress,
@@ -224,6 +225,15 @@ export default function TrackSelect({
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
             ▶ 开始演奏
+          </button>
+
+          <button
+            style={styles.practiceBtn}
+            onClick={() => onOpenPracticeLab && onOpenPracticeLab(track)}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            🧪 练习实验室
           </button>
 
           <button
@@ -632,6 +642,21 @@ const styles = {
     boxShadow: '0 8px 40px rgba(255,51,102,0.4)',
     transition: 'all 0.2s',
     marginBottom: '12px'
+  },
+  practiceBtn: {
+    width: '100%',
+    padding: '14px',
+    background: 'linear-gradient(135deg, #6699ff 0%, #4477dd 100%)',
+    border: 'none',
+    borderRadius: '10px',
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: 600,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    marginBottom: '12px',
+    boxShadow: '0 4px 20px rgba(102,153,255,0.3)'
   },
   editBtn: {
     width: '100%',

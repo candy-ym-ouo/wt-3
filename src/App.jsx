@@ -5,6 +5,7 @@ import KeySettings from './components/KeySettings.jsx'
 import Result from './components/Result.jsx'
 import Editor from './components/Editor.jsx'
 import PlayerGrowthCenter from './components/PlayerGrowthCenter.jsx'
+import PracticeLab from './components/PracticeLab.jsx'
 import { defaultKeyConfig, tracks } from './data/tracks.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
 
@@ -18,6 +19,7 @@ export default function App() {
   const [isEditingMode, setIsEditingMode] = useState(false)
   const [showGrowthCenter, setShowGrowthCenter] = useState(false)
   const [growthInfo, setGrowthInfo] = useState(null)
+  const [practiceSection, setPracticeSection] = useState(null)
 
   const playerStore = usePlayerStore()
 
@@ -44,6 +46,7 @@ export default function App() {
     setGrowthInfo(null)
     setIsEditingMode(false)
     setEditingTrack(null)
+    setPracticeSection(null)
     setScreen('select')
     playerStore.clearNewlyUnlocked()
   }
@@ -82,6 +85,17 @@ export default function App() {
     setScreen('game')
   }
 
+  const handleOpenPracticeLab = (track) => {
+    setSelectedTrack(track)
+    setPracticeSection(null)
+    setScreen('practice')
+  }
+
+  const handleStartPractice = (section) => {
+    setPracticeSection(section)
+    setScreen('game')
+  }
+
   const allTracks = useMemo(() => {
     const trackMap = new Map()
     tracks.forEach(t => trackMap.set(t.id, t))
@@ -98,6 +112,7 @@ export default function App() {
           onOpenSettings={() => setScreen('settings')}
           onOpenEditor={() => handleOpenEditor(null)}
           onEditTrack={handleOpenEditor}
+          onOpenPracticeLab={handleOpenPracticeLab}
           keyConfig={keyConfig}
           playerData={playerStore.playerData}
           expProgress={playerStore.expProgress}
@@ -113,6 +128,14 @@ export default function App() {
             setScreen('select')
           }}
           onCancel={() => setScreen('select')}
+        />
+      )}
+      {screen === 'practice' && selectedTrack && (
+        <PracticeLab
+          track={selectedTrack}
+          keyConfig={keyConfig}
+          onStartPractice={handleStartPractice}
+          onBack={() => setScreen('select')}
         />
       )}
       {screen === 'editor' && (
@@ -137,6 +160,8 @@ export default function App() {
               handleBackToSelect()
             }
           }}
+          isPracticeMode={practiceSection !== null}
+          practiceSection={practiceSection}
         />
       )}
       {screen === 'result' && gameResult && (
