@@ -31,8 +31,8 @@ export default function App() {
     setGrowthInfo({
       gainedExp: growthResult.gainedExp,
       levelUps: growthResult.levelUps,
-      newAchievements: playerStore.newlyUnlocked.achievements,
-      newTitles: playerStore.newlyUnlocked.titles
+      newAchievements: growthResult.newAchievements,
+      newTitles: growthResult.newTitles
     })
     setGameResult(result)
     setScreen('result')

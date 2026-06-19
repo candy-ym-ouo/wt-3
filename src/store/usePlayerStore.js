@@ -127,79 +127,76 @@ export function usePlayerStore() {
     const gainedExp = calculateGainedExp(result, track)
     const levelUps = []
 
-    setPlayerData(prev => {
-      let newData = { ...prev }
+    let nextData = { ...playerData }
 
-      newData.playCount += 1
-      newData.totalPlayTime += track.duration
-      newData.lastPlayDate = new Date().toISOString()
-      if (!newData.firstPlayDate) {
-        newData.firstPlayDate = new Date().toISOString()
-      }
+    nextData.playCount += 1
+    nextData.totalPlayTime += track.duration
+    nextData.lastPlayDate = new Date().toISOString()
+    if (!nextData.firstPlayDate) {
+      nextData.firstPlayDate = new Date().toISOString()
+    }
 
-      newData.maxComboEver = Math.max(newData.maxComboEver, result.maxCombo)
+    nextData.maxComboEver = Math.max(nextData.maxComboEver, result.maxCombo)
 
-      newData.totalStats = {
-        perfect: newData.totalStats.perfect + result.stats.perfect,
-        great: newData.totalStats.great + result.stats.great,
-        good: newData.totalStats.good + result.stats.good,
-        miss: newData.totalStats.miss + result.stats.miss
-      }
+    nextData.totalStats = {
+      perfect: nextData.totalStats.perfect + result.stats.perfect,
+      great: nextData.totalStats.great + result.stats.great,
+      good: nextData.totalStats.good + result.stats.good,
+      miss: nextData.totalStats.miss + result.stats.miss
+    }
 
-      const record = {
-        id: Date.now(),
-        trackId: track.id,
-        trackTitle: track.title,
-        difficulty: track.difficulty,
-        level: track.level,
-        score: result.score,
-        rank: result.rank,
-        accuracy: result.accuracy,
-        maxCombo: result.maxCombo,
-        stats: { ...result.stats },
-        totalNotes: result.totalNotes,
-        cleared: result.cleared,
-        playedAt: new Date().toISOString()
-      }
+    const record = {
+      id: Date.now(),
+      trackId: track.id,
+      trackTitle: track.title,
+      difficulty: track.difficulty,
+      level: track.level,
+      score: result.score,
+      rank: result.rank,
+      accuracy: result.accuracy,
+      maxCombo: result.maxCombo,
+      stats: { ...result.stats },
+      totalNotes: result.totalNotes,
+      cleared: result.cleared,
+      playedAt: new Date().toISOString()
+    }
 
-      newData.trackRecords = [record, ...newData.trackRecords]
+    nextData.trackRecords = [record, ...nextData.trackRecords]
 
-      newData.totalExp += gainedExp
-      newData.exp += gainedExp
+    nextData.totalExp += gainedExp
+    nextData.exp += gainedExp
 
-      while (newData.exp >= (LEVEL_CURVE[newData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]) && newData.level < 100) {
-        newData.exp -= LEVEL_CURVE[newData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]
-        newData.level += 1
-        levelUps.push(newData.level)
-      }
+    while (nextData.exp >= (LEVEL_CURVE[nextData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]) && nextData.level < 100) {
+      nextData.exp -= LEVEL_CURVE[nextData.level - 1] || LEVEL_CURVE[LEVEL_CURVE.length - 1]
+      nextData.level += 1
+      levelUps.push(nextData.level)
+    }
 
-      const newAchievements = checkAchievements(newData)
-      if (newAchievements.length > 0) {
-        newData.unlockedAchievements = [
-          ...newData.unlockedAchievements,
-          ...newAchievements.map(a => a.id)
-        ]
-      }
+    const newAchievements = checkAchievements(nextData)
+    if (newAchievements.length > 0) {
+      nextData.unlockedAchievements = [
+        ...nextData.unlockedAchievements,
+        ...newAchievements.map(a => a.id)
+      ]
+    }
 
-      const newTitles = checkTitles(newData)
-      if (newTitles.length > 0) {
-        newData.unlockedTitles = [
-          ...newData.unlockedTitles,
-          ...newTitles.map(t => t.id)
-        ]
-      }
+    const newTitles = checkTitles(nextData)
+    if (newTitles.length > 0) {
+      nextData.unlockedTitles = [
+        ...nextData.unlockedTitles,
+        ...newTitles.map(t => t.id)
+      ]
+    }
 
-      setNewlyUnlocked({
-        achievements: newAchievements,
-        titles: newTitles,
-        levelUps
-      })
-
-      return newData
+    setPlayerData(nextData)
+    setNewlyUnlocked({
+      achievements: newAchievements,
+      titles: newTitles,
+      levelUps
     })
 
-    return { gainedExp, levelUps }
-  }, [calculateGainedExp, checkAchievements, checkTitles])
+    return { gainedExp, levelUps, newAchievements, newTitles }
+  }, [playerData, calculateGainedExp, checkAchievements, checkTitles])
 
   const getBestRecord = useCallback((trackId) => {
     const records = playerData.trackRecords.filter(r => r.trackId === trackId && r.cleared)
