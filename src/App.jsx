@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import TrackSelect from './components/TrackSelect.jsx'
 import Game from './components/Game.jsx'
 import KeySettings from './components/KeySettings.jsx'
@@ -54,9 +54,15 @@ export default function App() {
   }, [tutorialState.showTutorial, tutorialState.currentStep, tutorialState.isInTutorialFlow])
 
   const handleSelectTrack = (track) => {
+    clearTutorialState()
     setSelectedTrack(track)
     setScreen('game')
   }
+
+  const clearTutorialState = useCallback(() => {
+    setIsTutorialGame(false)
+    setShowTutorialComplete(false)
+  }, [])
 
   const handleGameEnd = (result) => {
     const growthResult = playerStore.processGameResult(result, selectedTrack)
@@ -77,6 +83,7 @@ export default function App() {
   }
 
   const handleBackToSelect = () => {
+    clearTutorialState()
     setSelectedTrack(null)
     setGameResult(null)
     setGrowthInfo(null)
@@ -118,17 +125,20 @@ export default function App() {
   }
 
   const handlePlayFromEditor = (track) => {
+    clearTutorialState()
     setSelectedTrack(track)
     setScreen('game')
   }
 
   const handleOpenPracticeLab = (track) => {
+    clearTutorialState()
     setSelectedTrack(track)
     setPracticeSection(null)
     setScreen('practice')
   }
 
   const handleStartPractice = (section) => {
+    clearTutorialState()
     setPracticeSection(section)
     setScreen('game')
   }
@@ -252,7 +262,12 @@ export default function App() {
         <Result
           result={gameResult}
           track={selectedTrack}
-          onRetry={() => setScreen('game')}
+          onRetry={() => {
+            if (!selectedTrack?.isTutorial) {
+              clearTutorialState()
+            }
+            setScreen('game')
+          }}
           onBack={() => {
             if (isEditingMode) {
               setScreen('editor')

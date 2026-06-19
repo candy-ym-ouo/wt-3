@@ -511,6 +511,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     isStartingRef.current = true
 
     try {
+      try {
+        Tone.Transport.stop()
+        Tone.Transport.cancel()
+        Tone.Transport.playbackRate = isTutorialMode ? tutorialPlaybackSpeed : 1.0
+        Tone.Transport.position = 0
+      } catch(e) {}
+
       if (!toneRef.current.audioReady) {
         await Tone.start()
         createSynths()
