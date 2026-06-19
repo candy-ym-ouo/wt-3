@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { tracks } from '../data/tracks.js'
 
-export default function TrackSelect({ onSelectTrack, onOpenSettings, keyConfig }) {
+export default function TrackSelect({ tracks, onSelectTrack, onOpenSettings, onOpenEditor, onEditTrack, keyConfig }) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [hoverIndex, setHoverIndex] = useState(-1)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
@@ -96,9 +95,14 @@ export default function TrackSelect({ onSelectTrack, onOpenSettings, keyConfig }
           {' '}圈层节奏{' '}
           <span style={{ color: '#00ffcc' }}>◆</span>
         </h1>
-        <button style={styles.settingsBtn} onClick={onOpenSettings}>
-          ⚙ 键位设置
-        </button>
+        <div style={styles.topButtons}>
+          <button style={styles.editorBtn} onClick={onOpenEditor}>
+            ✎ 谱面编辑器
+          </button>
+          <button style={styles.settingsBtn} onClick={onOpenSettings}>
+            ⚙ 键位设置
+          </button>
+        </div>
       </div>
 
       <div style={styles.mainContent}>
@@ -170,6 +174,15 @@ export default function TrackSelect({ onSelectTrack, onOpenSettings, keyConfig }
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
           >
             ▶ 开始演奏
+          </button>
+
+          <button
+            style={styles.editBtn}
+            onClick={() => onEditTrack && onEditTrack(track)}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            ✎ 编辑谱面
           </button>
 
           <div style={styles.hintText}>
@@ -279,6 +292,22 @@ const styles = {
     fontWeight: 800,
     letterSpacing: '6px',
     textShadow: '0 0 30px rgba(255,51,102,0.5)'
+  },
+  topButtons: {
+    display: 'flex',
+    gap: '12px'
+  },
+  editorBtn: {
+    background: 'rgba(0, 255, 204, 0.1)',
+    border: '1px solid rgba(0, 255, 204, 0.3)',
+    color: '#00ffcc',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 600,
+    backdropFilter: 'blur(10px)',
+    transition: 'all 0.2s'
   },
   settingsBtn: {
     background: 'rgba(255,255,255,0.05)',
@@ -464,6 +493,20 @@ const styles = {
     letterSpacing: '4px',
     cursor: 'pointer',
     boxShadow: '0 8px 40px rgba(255,51,102,0.4)',
+    transition: 'all 0.2s',
+    marginBottom: '12px'
+  },
+  editBtn: {
+    width: '100%',
+    padding: '14px',
+    background: 'rgba(0, 255, 204, 0.1)',
+    border: '1px solid rgba(0, 255, 204, 0.4)',
+    borderRadius: '10px',
+    color: '#00ffcc',
+    fontSize: '14px',
+    fontWeight: 600,
+    letterSpacing: '2px',
+    cursor: 'pointer',
     transition: 'all 0.2s',
     marginBottom: '16px'
   },
