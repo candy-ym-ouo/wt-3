@@ -59,6 +59,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     currentTime: 0
   })
 
+  const replayDataRef = useRef({
+    keyEvents: [],
+    judgeEvents: [],
+    scoreHistory: [],
+    healthHistory: []
+  })
+
   const toneRef = useRef({
     leadSynth: null,
     bassSynth: null,
@@ -374,6 +381,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     const baseScore = SCORE_VALUES[judgeType]
     const comboBonus = Math.floor(comboRef.current / 10) * 50
     const totalScore = baseScore + comboBonus
+    const comboBefore = comboRef.current
 
     scoreRef.current += totalScore
     setScore(scoreRef.current)
@@ -402,6 +410,28 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       healthRef.current = Math.min(100, healthRef.current + 6)
     }
     setHealth(healthRef.current)
+
+    replayDataRef.current.judgeEvents.push({
+      time: timeNow,
+      noteTime: note.time,
+      lane,
+      judgeType,
+      timeDiff: closestDiff,
+      scoreChange: totalScore,
+      comboBefore,
+      comboAfter: comboRef.current
+    })
+
+    replayDataRef.current.scoreHistory.push({
+      time: timeNow,
+      score: scoreRef.current,
+      combo: comboRef.current
+    })
+
+    replayDataRef.current.healthHistory.push({
+      time: timeNow,
+      health: healthRef.current
+    })
 
     data.hitEffects.push({
       lane,
@@ -464,6 +494,33 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     else if (accuracy >= 80) rank = 'B'
     else if (accuracy >= 70) rank = 'C'
 
+    const replayData = {
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      trackId: track.id,
+      trackTitle: track.title,
+      difficulty: track.difficulty,
+      level: track.level,
+      artist: track.artist,
+      bpm: track.bpm,
+      duration: track.duration,
+      playedAt: new Date().toISOString(),
+      playbackSpeed: currentPlaybackSpeed,
+      isPracticeMode,
+      keyEvents: replayDataRef.current.keyEvents,
+      judgeEvents: replayDataRef.current.judgeEvents,
+      scoreHistory: replayDataRef.current.scoreHistory,
+      healthHistory: replayDataRef.current.healthHistory,
+      summary: {
+        score: scoreRef.current,
+        maxCombo: maxComboRef.current,
+        accuracy: Math.round(accuracy * 100) / 100,
+        rank,
+        stats: finalStats,
+        totalNotes,
+        cleared: healthRef.current > 0
+      }
+    }
+
     const result = {
       score: scoreRef.current,
       maxCombo: maxComboRef.current,
@@ -474,13 +531,14 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       health: healthRef.current,
       cleared: healthRef.current > 0,
       isPracticeMode,
-      playbackSpeed: currentPlaybackSpeed
+      playbackSpeed: currentPlaybackSpeed,
+      replayData
     }
 
     setTimeout(() => {
       onEnd(result)
     }, 300)
-  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed])
+  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track])
 
   const jumpToSection = useCallback((startBar, endBar) => {
     const startTime = startBar * barDuration
@@ -562,6 +620,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       hasStartedRef.current = true
       replayQueueRef.current = []
       loopCountRef.current = 0
+
+      replayDataRef.current = {
+        keyEvents: [],
+        judgeEvents: [],
+        scoreHistory: [{ time: 0, score: 0, combo: 0 }],
+        healthHistory: [{ time: 0, health: 100 }]
+      }
 
       setStats({ perfect: 0, great: 0, good: 0, miss: 0 })
       setCombo(0)
@@ -677,6 +742,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         activeData.activeNotes.forEach(note => {
           if (!note.hit && !note.missed && note.time + adjustedMissWindow < now) {
             note.missed = true
+            const comboBefore = comboRef.current
             comboRef.current = 0
             setCombo(0)
             statsRef.current.miss += 1
@@ -687,6 +753,28 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             if (shouldReplayNote('miss')) {
               addToReplayQueue(note)
             }
+
+            replayDataRef.current.judgeEvents.push({
+              time: now,
+              noteTime: note.time,
+              lane: note.lane,
+              judgeType: 'miss',
+              timeDiff: adjustedMissWindow,
+              scoreChange: 0,
+              comboBefore,
+              comboAfter: 0
+            })
+
+            replayDataRef.current.scoreHistory.push({
+              time: now,
+              score: scoreRef.current,
+              combo: 0
+            })
+
+            replayDataRef.current.healthHistory.push({
+              time: now,
+              health: healthRef.current
+            })
 
             activeData.hitEffects.push({
               lane: note.lane,
@@ -783,6 +871,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       timeNow = Tone.Transport.seconds
     } catch(e) {}
 
+    replayDataRef.current.keyEvents.push({
+      time: timeNow,
+      lane: laneIndex,
+      type: 'down',
+      keyCode: e.code
+    })
+
     const judgeType = judgeNote(laneIndex, timeNow)
 
     if (judgeType) {
@@ -795,7 +890,20 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     const laneIndex = keyConfig.lanes.indexOf(e.code)
     if (laneIndex === -1) return
     gameDataRef.current.lanePressed[laneIndex] = false
-  }, [keyConfig.lanes])
+
+    if (gameState === 'playing') {
+      let timeNow = 0
+      try {
+        timeNow = Tone.Transport.seconds
+      } catch(e) {}
+      replayDataRef.current.keyEvents.push({
+        time: timeNow,
+        lane: laneIndex,
+        type: 'up',
+        keyCode: e.code
+      })
+    }
+  }, [gameState, keyConfig.lanes])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)

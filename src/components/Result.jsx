@@ -4,7 +4,8 @@ import { RANK_COLORS } from '../data/growthData.js'
 const LEADERBOARD_TABS = [
   { id: 'track', label: '曲目榜' },
   { id: 'difficulty', label: '难度榜' },
-  { id: 'history', label: '历史记录' }
+  { id: 'history', label: '历史记录' },
+  { id: 'replay', label: '复盘分析' }
 ]
 
 export default function Result({
@@ -21,7 +22,11 @@ export default function Result({
   difficultyLeaderboard,
   isTutorialGame = false,
   showTutorialComplete = false,
-  onTutorialComplete
+  onTutorialComplete,
+  replayData,
+  getReplayAnalysis,
+  trackReplays,
+  onDeleteReplay
 }) {
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
@@ -39,6 +44,28 @@ export default function Result({
   const [activeTab, setActiveTab] = useState('track')
   const canvasRef = useRef(null)
   const animRef = useRef(null)
+  
+  const [replayAnalysis, setReplayAnalysis] = useState(null)
+  const [selectedReplayId, setSelectedReplayId] = useState(null)
+  const [timelineCursor, setTimelineCursor] = useState(0)
+  const [showTimelineDetail, setShowTimelineDetail] = useState(null)
+  const replayCanvasRef = useRef(null)
+  const replayAnimRef = useRef(null)
+  
+  useEffect(() => {
+    if (replayData && replayData.id) {
+      setSelectedReplayId(replayData.id)
+      const analysis = getReplayAnalysis(replayData.id)
+      setReplayAnalysis(analysis)
+    }
+  }, [replayData, getReplayAnalysis])
+  
+  useEffect(() => {
+    if (selectedReplayId && activeTab === 'replay') {
+      const analysis = getReplayAnalysis(selectedReplayId)
+      setReplayAnalysis(analysis)
+    }
+  }, [selectedReplayId, activeTab, getReplayAnalysis])
 
   const hasNewRecord = recordChecks && (
     recordChecks.isNewBest || recordChecks.isNewAccuracy || recordChecks.isNewCombo
@@ -472,6 +499,25 @@ export default function Result({
                 entries={trackHistory}
                 formatDate={formatDate}
                 getRankBadgeStyle={getRankBadgeStyle}
+              />
+            )}
+            {activeTab === 'replay' && (
+              <ReplayAnalysis
+                replayData={replayData}
+                replayAnalysis={replayAnalysis}
+                trackReplays={trackReplays}
+                selectedReplayId={selectedReplayId}
+                onSelectReplay={setSelectedReplayId}
+                onDeleteReplay={onDeleteReplay}
+                formatDate={formatDate}
+                getRankBadgeStyle={getRankBadgeStyle}
+                timelineCursor={timelineCursor}
+                setTimelineCursor={setTimelineCursor}
+                showTimelineDetail={showTimelineDetail}
+                setShowTimelineDetail={setShowTimelineDetail}
+                replayCanvasRef={replayCanvasRef}
+                replayAnimRef={replayAnimRef}
+                track={track}
               />
             )}
           </div>
@@ -1464,7 +1510,839 @@ const styles = {
     cursor: 'pointer',
     boxShadow: '0 8px 30px rgba(255,51,102,0.4)',
     transition: 'all 0.2s'
+  },
+  replayContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px'
+  },
+  replaySelector: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  replaySelectorLabel: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px',
+    fontWeight: 600
+  },
+  replaySelectorList: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap'
+  },
+  replaySelectorItem: {
+    position: 'relative',
+    flex: '1 1 140px',
+    minWidth: '140px',
+    padding: '10px 12px',
+    border: '1px solid',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  replaySelectorItemMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '4px'
+  },
+  replaySelectorScore: {
+    fontSize: '13px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    color: '#fff'
+  },
+  replaySelectorAcc: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'monospace',
+    marginLeft: 'auto'
+  },
+  replaySelectorItemSub: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.3)',
+    fontFamily: 'monospace'
+  },
+  currentReplayBadge: {
+    padding: '2px 6px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.3), rgba(255,51,102,0.15))',
+    border: '1px solid rgba(255,51,102,0.4)',
+    borderRadius: '4px',
+    color: '#ff3366',
+    fontWeight: 700
+  },
+  deleteReplayBtn: {
+    position: 'absolute',
+    top: '4px',
+    right: '4px',
+    width: '20px',
+    height: '20px',
+    background: 'rgba(255,51,102,0.2)',
+    border: '1px solid rgba(255,51,102,0.3)',
+    borderRadius: '4px',
+    color: '#ff3366',
+    fontSize: '10px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    opacity: 0,
+    transition: 'all 0.2s'
+  },
+  replayTabBar: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap',
+    marginBottom: '12px'
+  },
+  replayTabBtn: {
+    flex: '1 1 auto',
+    padding: '8px 10px',
+    border: '1px solid',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    whiteSpace: 'nowrap'
+  },
+  timelineHint: {
+    textAlign: 'center',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: '8px'
+  },
+  replayCanvas: {
+    width: '100%',
+    height: '200px',
+    background: 'rgba(0,0,0,0.3)',
+    borderRadius: '8px',
+    cursor: 'pointer'
+  },
+  timelineLegend: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '16px',
+    marginTop: '12px'
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  legendDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%'
+  },
+  laneAnalysis: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '10px'
+  },
+  laneCard: {
+    padding: '12px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '10px'
+  },
+  laneCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px'
+  },
+  laneCardTitle: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#fff',
+    letterSpacing: '1px'
+  },
+  laneCardAcc: {
+    fontSize: '14px',
+    fontWeight: 800,
+    fontFamily: 'monospace'
+  },
+  laneCardStats: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '4px',
+    marginBottom: '10px'
+  },
+  laneStatItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px'
+  },
+  laneStatLabel: {
+    fontSize: '9px',
+    color: 'rgba(255,255,255,0.3)',
+    letterSpacing: '0.5px'
+  },
+  laneProgressBg: {
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  laneProgressFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 1s ease-out'
+  },
+  timingAnalysis: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px'
+  },
+  timingCards: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '8px'
+  },
+  timingCard: {
+    padding: '12px 8px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    textAlign: 'center'
+  },
+  timingCardLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px',
+    marginBottom: '6px'
+  },
+  timingCardValue: {
+    fontSize: '22px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    marginBottom: '4px'
+  },
+  timingCardSub: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.3)'
+  },
+  timingHint: {
+    padding: '12px 16px',
+    background: 'linear-gradient(135deg, rgba(0,255,204,0.08), rgba(0,204,170,0.04))',
+    border: '1px solid rgba(0,255,204,0.2)',
+    borderRadius: '8px',
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center'
+  },
+  segmentAnalysis: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    maxHeight: '300px',
+    overflowY: 'auto'
+  },
+  segmentCard: {
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '8px'
+  },
+  segmentHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px'
+  },
+  segmentTime: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'monospace'
+  },
+  segmentAcc: {
+    fontSize: '13px',
+    fontWeight: 700,
+    fontFamily: 'monospace'
+  },
+  segmentBars: {
+    display: 'flex',
+    height: '8px',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    marginBottom: '6px'
+  },
+  segmentBar: {
+    height: '100%',
+    transition: 'width 1s ease-out'
+  },
+  segmentStats: {
+    display: 'flex',
+    gap: '12px',
+    fontSize: '10px',
+    fontFamily: 'monospace'
+  },
+  segmentWarning: {
+    marginTop: '6px',
+    padding: '6px 10px',
+    background: 'rgba(255,51,102,0.1)',
+    border: '1px solid rgba(255,51,102,0.2)',
+    borderRadius: '4px',
+    fontSize: '10px',
+    color: '#ff3366'
+  },
+  breaksAnalysis: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  breaksHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0 4px'
+  },
+  breaksHint: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.3)'
+  },
+  breaksList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    maxHeight: '250px',
+    overflowY: 'auto'
+  },
+  breakItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 12px',
+    background: 'rgba(255,51,102,0.05)',
+    border: '1px solid rgba(255,51,102,0.1)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  breakIndex: {
+    width: '32px',
+    fontSize: '14px',
+    fontWeight: 800,
+    color: '#ff3366',
+    fontFamily: 'monospace'
+  },
+  breakInfo: {
+    flex: 1
+  },
+  breakTime: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'monospace',
+    marginBottom: '2px'
+  },
+  breakCombo: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  breakComboValue: {
+    color: '#ff3366',
+    fontWeight: 700
+  },
+  breakArrow: {
+    fontSize: '16px',
+    color: 'rgba(255,255,255,0.3)'
+  },
+  emptyHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center'
   }
+}
+
+function ReplayAnalysis({
+  replayData,
+  replayAnalysis,
+  trackReplays,
+  selectedReplayId,
+  onSelectReplay,
+  onDeleteReplay,
+  formatDate,
+  getRankBadgeStyle,
+  timelineCursor,
+  setTimelineCursor,
+  showTimelineDetail,
+  setShowTimelineDetail,
+  replayCanvasRef,
+  replayAnimRef,
+  track
+}) {
+  const [replayTab, setReplayTab] = useState('timeline')
+
+  useEffect(() => {
+    if (!replayData || !replayAnalysis || replayTab !== 'timeline') return
+    
+    const canvas = replayCanvasRef.current
+    if (!canvas) return
+    
+    const ctx = canvas.getContext('2d')
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+    const w = rect.width
+    const h = rect.height
+
+    let t = 0
+    const draw = () => {
+      t += 0.016
+      ctx.clearRect(0, 0, w, h)
+
+      const duration = track.duration
+      const padding = { top: 20, right: 20, bottom: 40, left: 50 }
+      const chartW = w - padding.left - padding.right
+      const chartH = h - padding.top - padding.bottom
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= 10; i++) {
+        const x = padding.left + (chartW / 10) * i
+        ctx.beginPath()
+        ctx.moveTo(x, padding.top)
+        ctx.lineTo(x, padding.top + chartH)
+        ctx.stroke()
+        
+        const time = Math.round((duration / 10) * i)
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'
+        ctx.font = '10px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText(`${time}s`, x, padding.top + chartH + 20)
+      }
+
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+
+      const laneHeight = chartH / 4
+      replayData.judgeEvents.forEach(judge => {
+        const x = padding.left + (judge.time / duration) * chartW
+        const laneY = padding.top + laneHeight * judge.lane + laneHeight / 2
+        
+        const size = judge.judgeType === 'perfect' ? 6 : judge.judgeType === 'great' ? 5 : judge.judgeType === 'good' ? 4 : 3
+        const alpha = judge.judgeType === 'miss' ? 0.8 : 0.9
+        
+        ctx.beginPath()
+        ctx.arc(x, laneY, size, 0, Math.PI * 2)
+        ctx.fillStyle = `${judgeColors[judge.judgeType]}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`
+        ctx.fill()
+        
+        if (Math.abs(x - (padding.left + (timelineCursor / duration) * chartW)) < 4) {
+          ctx.strokeStyle = '#fff'
+          ctx.lineWidth = 1.5
+          ctx.stroke()
+        }
+      })
+
+      for (let i = 0; i < 4; i++) {
+        const y = padding.top + laneHeight * i
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+        ctx.setLineDash([4, 4])
+        ctx.beginPath()
+        ctx.moveTo(padding.left, y)
+        ctx.lineTo(padding.left + chartW, y)
+        ctx.stroke()
+        ctx.setLineDash([])
+        
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'
+        ctx.font = '10px monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(`L${i + 1}`, padding.left - 8, y + laneHeight / 2 + 4)
+      }
+
+      const cursorX = padding.left + (timelineCursor / duration) * chartW
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(cursorX, padding.top)
+      ctx.lineTo(cursorX, padding.top + chartH)
+      ctx.stroke()
+
+      if (showTimelineDetail) {
+        const judge = replayData.judgeEvents.find(j => 
+          Math.abs(j.time - timelineCursor) < 0.1
+        )
+        if (judge) {
+          const timeStr = `${judge.time.toFixed(2)}s`
+          const diffMs = Math.round(judge.timeDiff * 1000)
+          const text = `${judge.judgeType.toUpperCase()} · ${diffMs > 0 ? '+' : ''}${diffMs}ms`
+          const textW = ctx.measureText(text).width + 16
+          
+          ctx.fillStyle = 'rgba(0,0,0,0.85)'
+          ctx.fillRect(cursorX - textW / 2, padding.top - 30, textW, 22)
+          ctx.fillStyle = judgeColors[judge.judgeType]
+          ctx.font = 'bold 10px monospace'
+          ctx.textAlign = 'center'
+          ctx.fillText(text, cursorX, padding.top - 14)
+        }
+      }
+
+      replayAnimRef.current = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return () => {
+      if (replayAnimRef.current) {
+        cancelAnimationFrame(replayAnimRef.current)
+      }
+    }
+  }, [replayData, replayAnalysis, replayTab, timelineCursor, showTimelineDetail, track, replayCanvasRef, replayAnimRef])
+
+  const handleTimelineClick = (e) => {
+    if (!replayData) return
+    const canvas = replayCanvasRef.current
+    if (!canvas) return
+    
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const padding = { left: 50, right: 20 }
+    const chartW = rect.width - padding.left - padding.right
+    const ratio = (x - padding.left) / chartW
+    const time = Math.max(0, Math.min(track.duration, ratio * track.duration))
+    setTimelineCursor(time)
+    
+    const judge = replayData.judgeEvents.find(j => 
+      Math.abs(j.time - time) < 0.1
+    )
+    if (judge) {
+      setShowTimelineDetail(judge)
+      setTimeout(() => setShowTimelineDetail(null), 3000)
+    }
+  }
+
+  if (!replayData && trackReplays.length === 0) {
+    return (
+      <div style={styles.emptyState}>
+        <div style={styles.emptyIcon}>🎬</div>
+        <div style={styles.emptyText}>暂无回放记录</div>
+        <div style={styles.emptyHint}>完成游戏后将自动保存回放数据</div>
+      </div>
+    )
+  }
+
+  const currentReplay = trackReplays.find(r => r.id === selectedReplayId) || replayData
+
+  return (
+    <div style={styles.replayContainer}>
+      {trackReplays.length > 0 && (
+        <div style={styles.replaySelector}>
+          <div style={styles.replaySelectorLabel}>选择回放</div>
+          <div style={styles.replaySelectorList}>
+            {trackReplays.slice(0, 5).map((r, idx) => (
+              <div
+                key={r.id}
+                onClick={() => onSelectReplay(r.id)}
+                className="replay-selector-item"
+                style={{
+                  ...styles.replaySelectorItem,
+                  background: selectedReplayId === r.id 
+                    ? 'linear-gradient(135deg, rgba(255,51,102,0.2), rgba(0,255,204,0.15))'
+                    : 'rgba(255,255,255,0.03)',
+                  borderColor: selectedReplayId === r.id 
+                    ? 'rgba(255,51,102,0.4)' 
+                    : 'rgba(255,255,255,0.06)'
+                }}
+              >
+                <div style={styles.replaySelectorItemMain}>
+                  <span style={styles.replaySelectorScore}>
+                    {String(r.summary?.score || r.score).padStart(8, '0')}
+                  </span>
+                  <span style={{
+                    ...styles.rankBadgeMini,
+                    ...getRankBadgeStyle(r.summary?.rank || r.rank)
+                  }}>
+                    {r.summary?.rank || r.rank}
+                  </span>
+                  <span style={styles.replaySelectorAcc}>
+                    {(r.summary?.accuracy || r.accuracy).toFixed(2)}%
+                  </span>
+                </div>
+                <div style={styles.replaySelectorItemSub}>
+                  <span>{formatDate(r.playedAt)}</span>
+                  {r.playbackSpeed !== 1 && (
+                    <span style={styles.speedMiniBadge}>{r.playbackSpeed}x</span>
+                  )}
+                  {idx === 0 && replayData && r.id === replayData.id && (
+                    <span style={styles.currentReplayBadge}>本次</span>
+                  )}
+                </div>
+                <button
+                  className="delete-replay-btn"
+                  style={styles.deleteReplayBtn}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (confirm('确定删除此回放吗？')) {
+                      onDeleteReplay(r.id)
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {currentReplay && replayAnalysis && (
+        <>
+          <div style={styles.replayTabBar}>
+            {[
+              { id: 'timeline', label: '🕐 判定时间线' },
+              { id: 'lanes', label: '📊 轨道分析' },
+              { id: 'timing', label: '⏱ 时机偏差' },
+              { id: 'segments', label: '📈 分段表现' },
+              { id: 'breaks', label: '💔 连击中断' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                style={{
+                  ...styles.replayTabBtn,
+                  background: replayTab === tab.id
+                    ? 'linear-gradient(135deg, rgba(0,255,204,0.2), rgba(0,204,170,0.1))'
+                    : 'rgba(255,255,255,0.03)',
+                  borderColor: replayTab === tab.id
+                    ? 'rgba(0,255,204,0.3)'
+                    : 'rgba(255,255,255,0.06)',
+                  color: replayTab === tab.id ? '#00ffcc' : 'rgba(255,255,255,0.5)'
+                }}
+                onClick={() => setReplayTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {replayTab === 'timeline' && (
+            <div>
+              <div style={styles.timelineHint}>
+                💡 点击时间线查看判定详情
+              </div>
+              <canvas
+                ref={replayCanvasRef}
+                style={styles.replayCanvas}
+                onClick={handleTimelineClick}
+              />
+              <div style={styles.timelineLegend}>
+                <div style={styles.legendItem}>
+                  <span style={{ ...styles.legendDot, background: '#ffcc00' }}></span>
+                  <span>PERFECT</span>
+                </div>
+                <div style={styles.legendItem}>
+                  <span style={{ ...styles.legendDot, background: '#00ffcc' }}></span>
+                  <span>GREAT</span>
+                </div>
+                <div style={styles.legendItem}>
+                  <span style={{ ...styles.legendDot, background: '#6699ff' }}></span>
+                  <span>GOOD</span>
+                </div>
+                <div style={styles.legendItem}>
+                  <span style={{ ...styles.legendDot, background: '#ff3366' }}></span>
+                  <span>MISS</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {replayTab === 'lanes' && (
+            <div style={styles.laneAnalysis}>
+              {replayAnalysis.laneStats.map(lane => (
+                <div key={lane.lane} style={styles.laneCard}>
+                  <div style={styles.laneCardHeader}>
+                    <span style={styles.laneCardTitle}>轨道 {lane.lane + 1}</span>
+                    <span style={{
+                      ...styles.laneCardAcc,
+                      color: lane.accuracy >= 90 ? '#ffcc00' : lane.accuracy >= 70 ? '#00ffcc' : '#ff3366'
+                    }}>
+                      {lane.accuracy.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div style={styles.laneCardStats}>
+                    <div style={styles.laneStatItem}>
+                      <span style={{ color: '#ffcc00' }}>{lane.perfect}</span>
+                      <span style={styles.laneStatLabel}>PERFECT</span>
+                    </div>
+                    <div style={styles.laneStatItem}>
+                      <span style={{ color: '#00ffcc' }}>{lane.great}</span>
+                      <span style={styles.laneStatLabel}>GREAT</span>
+                    </div>
+                    <div style={styles.laneStatItem}>
+                      <span style={{ color: '#6699ff' }}>{lane.good}</span>
+                      <span style={styles.laneStatLabel}>GOOD</span>
+                    </div>
+                    <div style={styles.laneStatItem}>
+                      <span style={{ color: '#ff3366' }}>{lane.miss}</span>
+                      <span style={styles.laneStatLabel}>MISS</span>
+                    </div>
+                  </div>
+                  <div style={styles.laneProgressBg}>
+                    <div style={{
+                      ...styles.laneProgressFill,
+                      width: `${lane.total > 0 ? ((lane.perfect + lane.great) / lane.total) * 100 : 0}%`,
+                      background: 'linear-gradient(90deg, #ffcc00, #00ffcc)'
+                    }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {replayTab === 'timing' && (
+            <div style={styles.timingAnalysis}>
+              <div style={styles.timingCards}>
+                <div style={styles.timingCard}>
+                  <div style={styles.timingCardLabel}>早按</div>
+                  <div style={{ ...styles.timingCardValue, color: '#6699ff' }}>
+                    {replayAnalysis.earlyLate.early}
+                  </div>
+                  <div style={styles.timingCardSub}>按键过快</div>
+                </div>
+                <div style={styles.timingCard}>
+                  <div style={styles.timingCardLabel}>完美时机</div>
+                  <div style={{ ...styles.timingCardValue, color: '#ffcc00' }}>
+                    {replayAnalysis.earlyLate.perfectTiming}
+                  </div>
+                  <div style={styles.timingCardSub}>完全对齐</div>
+                </div>
+                <div style={styles.timingCard}>
+                  <div style={styles.timingCardLabel}>晚按</div>
+                  <div style={{ ...styles.timingCardValue, color: '#ff3366' }}>
+                    {replayAnalysis.earlyLate.late}
+                  </div>
+                  <div style={styles.timingCardSub}>按键过慢</div>
+                </div>
+                <div style={styles.timingCard}>
+                  <div style={styles.timingCardLabel}>平均偏差</div>
+                  <div style={{
+                    ...styles.timingCardValue,
+                    color: replayAnalysis.earlyLate.averageDiff > 50 ? '#ff3366' 
+                          : replayAnalysis.earlyLate.averageDiff > 20 ? '#ffcc00' 
+                          : '#00ffcc'
+                  }}>
+                    {replayAnalysis.earlyLate.averageDiff > 0 ? '+' : ''}
+                    {replayAnalysis.earlyLate.averageDiff}ms
+                  </div>
+                  <div style={styles.timingCardSub}>
+                    {replayAnalysis.earlyLate.averageDiff > 20 ? '整体偏慢' 
+                     : replayAnalysis.earlyLate.averageDiff < -20 ? '整体偏快' 
+                     : '时机良好'}
+                  </div>
+                </div>
+              </div>
+              
+              <div style={styles.timingHint}>
+                {replayAnalysis.earlyLate.early > replayAnalysis.earlyLate.late ? (
+                  <span>💡 你的按键普遍偏快，尝试稍晚一点再按键</span>
+                ) : replayAnalysis.earlyLate.late > replayAnalysis.earlyLate.early ? (
+                  <span>💡 你的按键普遍偏慢，尝试稍早一点再按键</span>
+                ) : (
+                  <span>💡 你的按键时机非常均衡，继续保持！</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {replayTab === 'segments' && (
+            <div style={styles.segmentAnalysis}>
+              {replayAnalysis.timeSegments.map((seg, idx) => {
+                if (seg.total === 0) return null
+                return (
+                  <div key={idx} style={styles.segmentCard}>
+                    <div style={styles.segmentHeader}>
+                      <span style={styles.segmentTime}>
+                        {Math.floor(seg.startTime / 60)}:{String(Math.floor(seg.startTime % 60)).padStart(2, '0')} - 
+                        {Math.floor(seg.endTime / 60)}:{String(Math.floor(seg.endTime % 60)).padStart(2, '0')}
+                      </span>
+                      <span style={{
+                        ...styles.segmentAcc,
+                        color: seg.accuracy >= 90 ? '#ffcc00' : seg.accuracy >= 70 ? '#00ffcc' : '#ff3366'
+                      }}>
+                        {seg.accuracy.toFixed(2)}%
+                      </span>
+                    </div>
+                    <div style={styles.segmentBars}>
+                      <div style={{ ...styles.segmentBar, width: `${(seg.perfect / seg.total) * 100}%`, background: '#ffcc00' }}></div>
+                      <div style={{ ...styles.segmentBar, width: `${(seg.great / seg.total) * 100}%`, background: '#00ffcc' }}></div>
+                      <div style={{ ...styles.segmentBar, width: `${(seg.good / seg.total) * 100}%`, background: '#6699ff' }}></div>
+                      <div style={{ ...styles.segmentBar, width: `${(seg.miss / seg.total) * 100}%`, background: '#ff3366' }}></div>
+                    </div>
+                    <div style={styles.segmentStats}>
+                      <span style={{ color: '#ffcc00' }}>P:{seg.perfect}</span>
+                      <span style={{ color: '#00ffcc' }}>G:{seg.great}</span>
+                      <span style={{ color: '#6699ff' }}>O:{seg.good}</span>
+                      <span style={{ color: '#ff3366' }}>M:{seg.miss}</span>
+                    </div>
+                    {seg.accuracy < 70 && (
+                      <div style={styles.segmentWarning}>
+                        ⚠️ 此段表现较弱，建议重点练习
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {replayTab === 'breaks' && (
+            <div style={styles.breaksAnalysis}>
+              {replayAnalysis.comboBreaks.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}>🎉</div>
+                  <div style={styles.emptyText}>完美！没有连击中断</div>
+                  <div style={styles.emptyHint}>全连达成！</div>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.breaksHeader}>
+                    <span>共 {replayAnalysis.comboBreaks.length} 次连击中断</span>
+                    <span style={styles.breaksHint}>点击可在时间线中定位</span>
+                  </div>
+                  <div style={styles.breaksList}>
+                    {replayAnalysis.comboBreaks.map((breakPoint, idx) => (
+                      <div
+                        key={idx}
+                        style={styles.breakItem}
+                        onClick={() => {
+                          setTimelineCursor(breakPoint.time)
+                          setReplayTab('timeline')
+                        }}
+                      >
+                        <div style={styles.breakIndex}>#{idx + 1}</div>
+                        <div style={styles.breakInfo}>
+                          <div style={styles.breakTime}>
+                            时间: {breakPoint.time.toFixed(2)}s · 轨道: {breakPoint.lane + 1}
+                          </div>
+                          <div style={styles.breakCombo}>
+                            连击中断于 <span style={styles.breakComboValue}>{breakPoint.comboBefore}</span> COMBO
+                          </div>
+                        </div>
+                        <div style={styles.breakArrow}>→</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
 
 const styleSheet = document.createElement('style')
@@ -1484,6 +2362,17 @@ styleSheet.textContent = `
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+  }
+  .replay-selector-item:hover .delete-replay-btn {
+    opacity: 1;
+  }
+  @keyframes bannerIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes pulseStar {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
   }
 `
 document.head.appendChild(styleSheet)
