@@ -81,8 +81,8 @@ export default function Result({ result, track, onRetry, onBack }) {
       for (let ring = 0; ring < 5; ring++) {
         const r = 60 + ring * 25 + Math.sin(t * 0.5 + ring) * 5
         ctx.beginPath()
-        const alpha = Math.floor((0.1 + Math.sin(t + ring) * 0.1) * 255)
-        ctx.strokeStyle = `${colors[0]}${alpha.toString(16).padStart(2, '0')}`
+        const alpha = Math.floor((0.1 + Math.sin(t + ring) * 0.1) * 255).toString(16).padStart(2, '0')
+        ctx.strokeStyle = `${colors[0]}${alpha}`
         ctx.lineWidth = 1.5
         for (let i = 0; i <= Math.PI * 2; i += 0.02) {
           const noise = Math.sin(i * 8 + t * 2 + ring) * 6
@@ -150,7 +150,9 @@ export default function Result({ result, track, onRetry, onBack }) {
             )}
           </div>
           <h1 style={styles.trackTitle}>{track.title}</h1>
-          <div style={styles.trackArtist}>{track.artist} · {track.difficulty} Lv.{track.level}</div>
+          <div style={styles.trackArtist}>
+            {track.artist} · {track.difficulty} Lv.{track.level}
+          </div>
         </div>
 
         <div style={styles.mainRow}>
@@ -186,7 +188,10 @@ export default function Result({ result, track, onRetry, onBack }) {
               </div>
               <div style={styles.accuracyItem}>
                 <span style={styles.accuracyLabel}>CLEAR RATE</span>
-                <span style={{ ...styles.accuracyValue, color: hitRate >= 90 ? '#ffcc00' : hitRate >= 70 ? '#00ffcc' : '#ff3366' }}>{hitRate.toFixed(1)}%</span>
+                <span style={{
+                  ...styles.accuracyValue,
+                  color: hitRate >= 90 ? '#ffcc00' : hitRate >= 70 ? '#00ffcc' : '#ff3366'
+                }}>{hitRate.toFixed(1)}%</span>
               </div>
             </div>
           </div>
@@ -202,28 +207,28 @@ export default function Result({ result, track, onRetry, onBack }) {
             value={animatedStats.perfect}
             color="#ffcc00"
             total={totalNotes}
-            width={result.stats.perfect}
+            count={result.stats.perfect}
           />
           <StatItem
             label="GREAT"
             value={animatedStats.great}
             color="#00ffcc"
             total={totalNotes}
-            width={result.stats.great}
+            count={result.stats.great}
           />
           <StatItem
             label="GOOD"
             value={animatedStats.good}
             color="#6699ff"
             total={totalNotes}
-            width={result.stats.good}
+            count={result.stats.good}
           />
           <StatItem
             label="MISS"
             value={animatedStats.miss}
             color="#ff3366"
             total={totalNotes}
-            width={result.stats.miss}
+            count={result.stats.miss}
           />
         </div>
 
@@ -278,8 +283,8 @@ export default function Result({ result, track, onRetry, onBack }) {
   )
 }
 
-function StatItem({ label, value, color, total, width }) {
-  const percent = total > 0 ? Math.round((width / total) * 100) : 0
+function StatItem({ label, value, color, total, count }) {
+  const percent = total > 0 ? Math.round((count / total) * 100) : 0
   return (
     <div style={statStyles.container}>
       <div style={statStyles.header}>

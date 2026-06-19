@@ -38,8 +38,8 @@ export default function ScorePanel({
   }, [score, displayScore])
 
   const formatTime = (sec) => {
-    const m = Math.floor(sec / 60)
-    const s = Math.floor(sec % 60)
+    const m = Math.floor(Math.max(0, sec) / 60)
+    const s = Math.floor(Math.max(0, sec) % 60)
     return `${m}:${String(s).padStart(2, '0')}`
   }
 
@@ -65,8 +65,8 @@ export default function ScorePanel({
           <div
             style={{
               ...styles.progressFill,
-              width: `${progress * 100}%`,
-              background: `linear-gradient(90deg, #ff3366 0%, #ffcc00 50%, #00ffcc 100%)`
+              width: `${Math.max(0, Math.min(100, progress * 100))}%`,
+              background: 'linear-gradient(90deg, #ff3366 0%, #ffcc00 50%, #00ffcc 100%)'
             }}
           />
         </div>
@@ -75,7 +75,7 @@ export default function ScorePanel({
       <div style={styles.scoreSection}>
         <div style={styles.scoreLabel}>SCORE</div>
         <div style={styles.scoreValue}>
-          {String(Math.floor(displayScore)).padStart(8, '0')}
+          {String(Math.floor(Math.max(0, displayScore))).padStart(8, '0')}
         </div>
       </div>
 
@@ -102,14 +102,14 @@ export default function ScorePanel({
         <div style={styles.healthHeader}>
           <span style={styles.healthLabel}>HP</span>
           <span style={{ ...styles.healthValue, color: healthColor }}>
-            {Math.floor(health)}%
+            {Math.floor(Math.max(0, health))}%
           </span>
         </div>
         <div style={styles.healthBarBg}>
           <div
             style={{
               ...styles.healthBarFill,
-              width: `${health}%`,
+              width: `${Math.max(0, Math.min(100, health))}%`,
               background: `linear-gradient(90deg, ${healthColor}, ${healthColor}cc)`,
               boxShadow: `0 0 20px ${healthColor}66`
             }}
@@ -317,7 +317,7 @@ const styles = {
   },
   comboSection: {
     position: 'absolute',
-    top: '40%',
+    top: '38%',
     left: '32px',
     transform: 'translateY(-50%)',
     transition: 'transform 0.15s ease-out'
@@ -343,7 +343,7 @@ const styles = {
   },
   comboMilestone: {
     position: 'absolute',
-    top: '55%',
+    top: '52%',
     left: '32px',
     transform: 'translateY(-50%)'
   }

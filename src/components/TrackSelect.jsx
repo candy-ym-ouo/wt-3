@@ -60,7 +60,8 @@ export default function TrackSelect({ onSelectTrack, onOpenSettings, keyConfig }
         const x = cx + Math.cos(ang) * dist
         const y = cy + Math.sin(ang) * dist
         const size = 1.5 + Math.sin(t * 2 + i) * 0.8
-        ctx.fillStyle = `rgba(${keyConfig.colors[i % 4]}, 0.6)`
+        const colorIdx = i % keyConfig.colors.length
+        ctx.fillStyle = keyConfig.colors[colorIdx] + '99'
         ctx.beginPath()
         ctx.arc(x, y, size, 0, Math.PI * 2)
         ctx.fill()
@@ -172,7 +173,7 @@ export default function TrackSelect({ onSelectTrack, onOpenSettings, keyConfig }
           </button>
 
           <div style={styles.hintText}>
-            按 Enter 快速开始 · 方向键切换曲目
+            点击开始 · 按 {keyConfig.labels.join(' ')} 键演奏
           </div>
         </div>
       </div>
@@ -193,15 +194,15 @@ function WaveformPreview({ track }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
-    canvas.width = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
-    const w = canvas.width
-    const h = canvas.height
+    canvas.width = canvas.offsetWidth * 2
+    canvas.height = canvas.offsetHeight * 2
+    const w = canvas.offsetWidth
+    const h = canvas.offsetHeight
 
     ctx.clearRect(0, 0, w, h)
 
-    const duration = track.duration || 30
-    const visibleNotes = track.notes.filter(n => n.time < duration)
+    const duration = track.duration
+    const visibleNotes = track.notes
 
     ctx.strokeStyle = 'rgba(255,255,255,0.05)'
     ctx.lineWidth = 1
@@ -217,11 +218,9 @@ function WaveformPreview({ track }) {
     visibleNotes.forEach(note => {
       const x = (w / 4) * note.lane + w / 8
       const y = h - (note.time / duration) * h
-      ctx.fillStyle = colors[note.lane]
-      ctx.globalAlpha = 0.7
-      ctx.fillRect(x - 8, y - 2, 16, 4)
+      ctx.fillStyle = colors[note.lane] + 'aa'
+      ctx.fillRect(x - 6, y - 1, 12, 3)
     })
-    ctx.globalAlpha = 1
   }, [track])
 
   return <canvas ref={canvasRef} style={styles.waveformCanvas} />

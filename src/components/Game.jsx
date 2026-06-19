@@ -18,7 +18,7 @@ const SCORE_VALUES = {
 }
 
 export default function Game({ track, keyConfig, onEnd, onQuit }) {
-  const [gameState, setGameState] = useState('loading')
+  const [gameState, setGameState] = useState('ready')
   const [score, setScore] = useState(0)
   const [combo, setCombo] = useState(0)
   const [maxCombo, setMaxCombo] = useState(0)
@@ -33,7 +33,6 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
     miss: 0
   })
 
-  const canvasRef = useRef(null)
   const gameDataRef = useRef({
     notes: [],
     activeNotes: [],
@@ -41,96 +40,186 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
     particles: [],
     ringPulses: [],
     lanePressed: [false, false, false, false],
-    audioStarted: false
+    currentTime: 0
   })
-  const toneSynthRef = useRef(null)
-  const toneBassRef = useRef(null)
-  const toneNoiseRef = useRef(null)
-  const toneAnalyserRef = useRef(null)
-  const startTimeRef = useRef(0)
+
+  const toneRef = useRef({
+    leadSynth: null,
+    bassSynth: null,
+    padSynth: null,
+    kickSynth: null,
+    snareSynth: null,
+    hihatSynth: null,
+    analyser: null,
+    masterGain: null,
+    reverb: null,
+    snareFilter: null,
+    hihatFilter: null,
+    scheduledEvents: [],
+    audioReady: false
+  })
+
   const animFrameRef = useRef(null)
-  const transportIdRef = useRef(null)
-  const notesToScheduleRef = useRef([])
   const statsRef = useRef({ perfect: 0, great: 0, good: 0, miss: 0 })
   const comboRef = useRef(0)
   const scoreRef = useRef(0)
   const healthRef = useRef(100)
   const maxComboRef = useRef(0)
+  const gameEndedRef = useRef(false)
+  const isStartingRef = useRef(false)
+  const hasStartedRef = useRef(false)
 
-  const initAudio = useCallback(async () => {
-    await Tone.start()
+  const createSynths = useCallback(() => {
+    if (toneRef.current.audioReady) return
+
     Tone.Transport.bpm.value = track.bpm
 
-    const analyser = new Tone.Analyser('waveform', 256)
-    toneAnalyserRef.current = analyser
+    const masterGain = new Tone.Gain(0.7).toDestination()
+    const reverb = new Tone.Reverb({ decay: 2.5, wet: 0.2 })
+    reverb.connect(masterGain)
 
-    const compressor = new Tone.Compressor(-20, 4).toDestination()
-    const reverb = new Tone.Reverb({ decay: 2, wet: 0.3 }).connect(compressor)
-    analyser.connect(compressor)
+    const analyser = new Tone.Analyser('waveform', 512)
+    analyser.smoothing = 0.8
+    masterGain.connect(analyser)
 
-    const synth = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: track.synth.type === 'lead' ? 'sawtooth' : 'triangle' },
-      envelope: { attack: 0.02, decay: 0.2, sustain: 0.3, release: 0.8 },
+    toneRef.current.masterGain = masterGain
+    toneRef.current.reverb = reverb
+    toneRef.current.analyser = analyser
+
+    const leadSynth = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: track.synth.leadOsc },
+      envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.5 },
+      volume: -10
+    })
+    leadSynth.connect(reverb)
+    toneRef.current.leadSynth = leadSynth
+
+    const bassSynth = new Tone.MonoSynth({
+      oscillator: { type: track.synth.bassOsc },
+      envelope: { attack: 0.03, decay: 0.2, sustain: 0.4, release: 0.4 },
+      filterEnvelope: { attack: 0.01, decay: 0.3, baseFrequency: 80, octaves: 4, release: 0.2 },
       volume: -8
-    }).connect(reverb)
-    toneSynthRef.current = synth
+    })
+    bassSynth.connect(reverb)
+    toneRef.current.bassSynth = bassSynth
 
-    const bass = new Tone.MonoSynth({
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.05, decay: 0.3, sustain: 0.5, release: 0.5 },
-      filterEnvelope: { attack: 0.01, decay: 0.4, baseFrequency: 100, octaves: 3, release: 0.2 },
+    const padSynth = new Tone.PolySynth(Tone.AMSynth, {
+      harmonicity: 2,
+      oscillator: { type: track.synth.padOsc },
+      envelope: { attack: 0.5, decay: 0.3, sustain: 0.6, release: 2 },
+      volume: -18
+    })
+    padSynth.connect(reverb)
+    toneRef.current.padSynth = padSynth
+
+    const kickSynth = new Tone.MembraneSynth({
+      pitchDecay: 0.05,
+      octaves: 6,
+      envelope: { attack: 0.001, decay: 0.3, sustain: 0.01, release: 0.2 },
       volume: -6
-    }).connect(reverb)
-    toneBassRef.current = bass
+    })
+    kickSynth.connect(reverb)
+    kickSynth.connect(masterGain)
+    toneRef.current.kickSynth = kickSynth
 
-    const noise = new Tone.NoiseSynth({
-      noise: { type: 'pink' },
-      envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 },
-      volume: -15
-    }).connect(compressor)
-    toneNoiseRef.current = noise
+    const snareFilter = new Tone.Filter(3000, 'highpass')
+    const snareSynth = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
+      volume: -10
+    })
+    snareSynth.connect(snareFilter)
+    snareFilter.connect(reverb)
+    snareFilter.connect(masterGain)
+    toneRef.current.snareSynth = snareSynth
+    toneRef.current.snareFilter = snareFilter
 
-    gameDataRef.current.audioStarted = true
-  }, [track.bpm, track.synth.type])
+    const hihatFilter = new Tone.Filter(8000, 'highpass')
+    const hihatSynth = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: 0.04, sustain: 0, release: 0.02 },
+      volume: -16
+    })
+    hihatSynth.connect(hihatFilter)
+    hihatFilter.connect(reverb)
+    hihatFilter.connect(masterGain)
+    toneRef.current.hihatSynth = hihatSynth
+    toneRef.current.hihatFilter = hihatFilter
 
-  const playNoteSound = useCallback((noteIndex) => {
-    if (!gameDataRef.current.audioStarted) return
+    toneRef.current.audioReady = true
+  }, [track.bpm, track.synth])
 
-    const { synth, bass, noise } = {
-      synth: toneSynthRef.current,
-      bass: toneBassRef.current,
-      noise: toneNoiseRef.current
+  const scheduleSong = useCallback(() => {
+    const { songData } = track
+    const { leadSynth, bassSynth, padSynth, kickSynth, snareSynth, hihatSynth } = toneRef.current
+    const events = []
+
+    if (songData.lead) {
+      songData.lead.forEach(note => {
+        const eid = Tone.Transport.schedule((time) => {
+          try {
+            leadSynth.triggerAttackRelease(note.note, note.duration * 0.9, time, note.velocity)
+          } catch(e) {}
+        }, note.time)
+        events.push(eid)
+      })
     }
 
-    const scale = track.synth.scale
-    const semitone = scale[noteIndex % scale.length]
-    const octaveShift = Math.floor(noteIndex / scale.length) * 12
-
-    const rootFreq = new Tone.Frequency(track.synth.root)
-    const noteFreq = rootFreq.transpose(semitone + octaveShift)
-
-    synth.triggerAttackRelease(noteFreq, '8n')
-
-    if (noteIndex % 4 === 0) {
-      const bassFreq = new Tone.Frequency(track.synth.bass)
-      bass.triggerAttackRelease(bassFreq.transpose(semitone % 12), '4n')
+    if (songData.bass) {
+      songData.bass.forEach(note => {
+        const eid = Tone.Transport.schedule((time) => {
+          try {
+            bassSynth.triggerAttackRelease(note.note, note.duration * 0.9, time, note.velocity)
+          } catch(e) {}
+        }, note.time)
+        events.push(eid)
+      })
     }
 
-    if (noteIndex % 8 === 4) {
-      noise.triggerAttackRelease('32n')
+    if (songData.chords) {
+      songData.chords.forEach(note => {
+        const eid = Tone.Transport.schedule((time) => {
+          try {
+            padSynth.triggerAttackRelease(note.note, note.duration * 0.95, time, note.velocity)
+          } catch(e) {}
+        }, note.time)
+        events.push(eid)
+      })
     }
-  }, [track.synth])
+
+    if (songData.drums) {
+      songData.drums.forEach(drum => {
+        const eid = Tone.Transport.schedule((time) => {
+          try {
+            if (drum.type === 'kick') {
+              kickSynth.triggerAttackRelease('C2', '8n', time, drum.velocity)
+            } else if (drum.type === 'snare') {
+              snareSynth.triggerAttackRelease('16n', time, drum.velocity)
+            } else if (drum.type === 'hihat') {
+              hihatSynth.triggerAttackRelease('32n', time, drum.velocity)
+            }
+          } catch(e) {}
+        }, drum.time)
+        events.push(eid)
+      })
+    }
+
+    toneRef.current.scheduledEvents = events
+  }, [track])
 
   const playHitSound = useCallback((type) => {
-    if (!toneNoiseRef.current || !gameDataRef.current.audioStarted) return
+    if (!toneRef.current.audioReady) return
+    const { hihatSynth, snareSynth } = toneRef.current
 
-    if (type === 'perfect') {
-      toneNoiseRef.current.volume.value = -10
-      toneNoiseRef.current.triggerAttackRelease('16n')
-    } else if (type === 'miss') {
-      toneNoiseRef.current.volume.value = -20
-      toneNoiseRef.current.triggerAttackRelease('64n')
-    }
+    try {
+      if (type === 'perfect' || type === 'great') {
+        snareSynth.triggerAttackRelease('32n', undefined, 0.3)
+      } else if (type === 'good') {
+        hihatSynth.triggerAttackRelease('16n', undefined, 0.25)
+      } else if (type === 'miss') {
+        hihatSynth.triggerAttackRelease('8n', undefined, 0.12)
+      }
+    } catch(e) {}
   }, [])
 
   const judgeNote = useCallback((lane, timeNow) => {
@@ -140,7 +229,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
 
     for (let i = 0; i < data.activeNotes.length; i++) {
       const note = data.activeNotes[i]
-      if (note.lane !== lane || note.hit) continue
+      if (note.lane !== lane || note.hit || note.missed) continue
       const diff = Math.abs(note.time - timeNow)
       if (diff < closestDiff && diff < JUDGE_WINDOWS.miss) {
         closestDiff = diff
@@ -199,9 +288,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
       y: 1
     })
 
-    for (let p = 0; p < (judgeType === 'perfect' ? 16 : judgeType === 'great' ? 10 : 6); p++) {
-      const angle = (p / 16) * Math.PI * 2 + Math.random() * 0.3
-      const speed = 2 + Math.random() * 4
+    const particleCount = judgeType === 'perfect' ? 20 : judgeType === 'great' ? 12 : judgeType === 'good' ? 6 : 3
+    for (let p = 0; p < particleCount; p++) {
+      const angle = (p / particleCount) * Math.PI * 2 + Math.random() * 0.3
+      const speed = 2 + Math.random() * 5
       data.particles.push({
         x: 0.5 + (lane - 1.5) * 0.12,
         y: 0.82,
@@ -225,143 +315,15 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
     return judgeType
   }, [keyConfig.colors, playHitSound])
 
-  const handleKeyDown = useCallback((e) => {
-    if (gameState !== 'playing') return
-
-    const laneIndex = keyConfig.lanes.indexOf(e.code)
-    if (laneIndex === -1) return
-
-    e.preventDefault()
-    if (gameDataRef.current.lanePressed[laneIndex]) return
-
-    gameDataRef.current.lanePressed[laneIndex] = true
-
-    const timeNow = (Tone.now() - startTimeRef.current)
-    const judgeType = judgeNote(laneIndex, timeNow)
-
-    if (judgeType) {
-      playNoteSound(laneIndex + Math.floor(timeNow * track.bpm / 60))
-      setJudgeFeedback({ type: judgeType, lane: laneIndex, id: Date.now() })
-      setTimeout(() => setJudgeFeedback(null), 400)
-    }
-  }, [gameState, keyConfig.lanes, judgeNote, playNoteSound, track.bpm])
-
-  const handleKeyUp = useCallback((e) => {
-    const laneIndex = keyConfig.lanes.indexOf(e.code)
-    if (laneIndex === -1) return
-    gameDataRef.current.lanePressed[laneIndex] = false
-  }, [keyConfig.lanes])
-
-  useEffect(() => {
-    const init = async () => {
-      gameDataRef.current.notes = track.notes.map(n => ({
-        ...n,
-        hit: false,
-        judgeType: null
-      }))
-      gameDataRef.current.activeNotes = gameDataRef.current.notes.map(n => ({ ...n }))
-
-      await initAudio()
-      setGameState('ready')
-    }
-    init()
-  }, [track, initAudio])
-
-  useEffect(() => {
-    if (gameState !== 'ready') return
-
-    const timer = setTimeout(() => {
-      startGame()
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [gameState])
-
-  const startGame = useCallback(() => {
-    const lookAhead = 3
-    startTimeRef.current = Tone.now() + lookAhead
-    const data = gameDataRef.current
-
-    notesToScheduleRef.current = data.notes.filter(n => n.time < track.duration).map(n => ({ ...n }))
-
-    Tone.Transport.scheduleRepeat((time) => {
-      const elapsed = time - startTimeRef.current
-      const scheduled = notesToScheduleRef.current.filter(n =>
-        n.time <= elapsed + 0.1 && n.time > elapsed - 0.05 && !n.scheduled
-      )
-
-      scheduled.forEach(n => {
-        n.scheduled = true
-      })
-    }, '32n')
-
-    const gameLoop = () => {
-      if (!gameDataRef.current.audioStarted) return
-
-      const now = Tone.now() - startTimeRef.current
-      setCurrentTime(now)
-      setProgress(Math.min(1, now / track.duration))
-
-      const activeData = gameDataRef.current
-      activeData.activeNotes.forEach(note => {
-        if (!note.hit && !note.missed && note.time + JUDGE_WINDOWS.miss < now) {
-          note.missed = true
-          comboRef.current = 0
-          setCombo(0)
-          statsRef.current.miss += 1
-          setStats({ ...statsRef.current })
-          healthRef.current = Math.max(0, healthRef.current - 8)
-          setHealth(healthRef.current)
-
-          activeData.hitEffects.push({
-            lane: note.lane,
-            type: 'miss',
-            time: now,
-            y: 1
-          })
-
-          playHitSound('miss')
-        }
-      })
-
-      activeData.particles = activeData.particles.filter(p => {
-        p.x += p.vx
-        p.y += p.vy
-        p.vy += 0.001
-        p.life -= 0.02
-        return p.life > 0
-      })
-
-      activeData.ringPulses = activeData.ringPulses.filter(r => {
-        r.radius += 0.02
-        return r.radius < 0.25
-      })
-
-      const allNotes = activeData.activeNotes
-      const totalNotes = allNotes.length
-      const notesProcessed = allNotes.filter(n => n.hit || n.missed).length
-
-      if (now >= track.duration + 1) {
-        endGame()
-        return
-      }
-
-      if (healthRef.current <= 0) {
-        endGame()
-        return
-      }
-
-      animFrameRef.current = requestAnimationFrame(gameLoop)
-    }
-
-    Tone.Transport.start()
-    animFrameRef.current = requestAnimationFrame(gameLoop)
-    setGameState('playing')
-  }, [track.duration, playHitSound])
-
   const endGame = useCallback(() => {
-    Tone.Transport.stop()
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
+
+    try {
+      Tone.Transport.stop()
+    } catch(e) {}
 
     const finalStats = { ...statsRef.current }
     const totalNotes = track.notes.length
@@ -386,8 +348,178 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
       cleared: healthRef.current > 0
     }
 
-    onEnd(result)
+    setTimeout(() => {
+      onEnd(result)
+    }, 300)
   }, [track.notes, onEnd])
+
+  const startGame = useCallback(async () => {
+    if (isStartingRef.current || gameEndedRef.current) return
+    
+    isStartingRef.current = true
+
+    try {
+      if (!toneRef.current.audioReady) {
+        await Tone.start()
+        createSynths()
+      }
+
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current)
+        animFrameRef.current = null
+      }
+
+      gameDataRef.current.notes = track.notes.map(n => ({
+        ...n,
+        hit: false,
+        missed: false,
+        judgeType: null
+      }))
+      gameDataRef.current.activeNotes = gameDataRef.current.notes.map(n => ({ ...n }))
+      gameDataRef.current.hitEffects = []
+      gameDataRef.current.particles = []
+      gameDataRef.current.ringPulses = []
+      gameDataRef.current.currentTime = 0
+
+      statsRef.current = { perfect: 0, great: 0, good: 0, miss: 0 }
+      comboRef.current = 0
+      scoreRef.current = 0
+      healthRef.current = 100
+      maxComboRef.current = 0
+      gameEndedRef.current = false
+      hasStartedRef.current = true
+
+      setStats({ perfect: 0, great: 0, good: 0, miss: 0 })
+      setCombo(0)
+      setScore(0)
+      setHealth(100)
+      setMaxCombo(0)
+      setCurrentTime(0)
+      setProgress(0)
+
+      try {
+        Tone.Transport.cancel()
+      } catch(e) {}
+      toneRef.current.scheduledEvents = []
+      scheduleSong()
+
+      try {
+        Tone.Transport.seconds = 0
+        Tone.Transport.start()
+      } catch(e) {
+          console.error('Transport start error:', e)
+        }
+
+      setGameState('playing')
+
+      let lastTime = 0
+      const gameLoop = () => {
+        if (gameEndedRef.current) {
+          return
+        }
+
+        let now = 0
+        try {
+          now = Tone.Transport.seconds
+        } catch(e) {}
+
+        gameDataRef.current.currentTime = now
+        setCurrentTime(now)
+        setProgress(Math.min(1, now / track.duration))
+
+        const activeData = gameDataRef.current
+
+        activeData.activeNotes.forEach(note => {
+          if (!note.hit && !note.missed && note.time + JUDGE_WINDOWS.miss < now) {
+            note.missed = true
+            comboRef.current = 0
+            setCombo(0)
+            statsRef.current.miss += 1
+            setStats({ ...statsRef.current })
+            healthRef.current = Math.max(0, healthRef.current - 8)
+            setHealth(healthRef.current)
+
+            activeData.hitEffects.push({
+              lane: note.lane,
+              type: 'miss',
+              time: now,
+              y: 1
+            })
+
+            playHitSound('miss')
+          }
+        })
+
+        activeData.particles = activeData.particles.filter(p => {
+          p.x += p.vx
+          p.y += p.vy
+          p.vy += 0.001
+          p.life -= 0.02
+          return p.life > 0
+        })
+
+        activeData.ringPulses = activeData.ringPulses.filter(r => {
+          r.radius += 0.02
+          return r.radius < 0.25
+        })
+
+        if (now >= track.duration + 1.5 && !gameEndedRef.current) {
+          gameEndedRef.current = true
+          endGame()
+          return
+        }
+
+        if (healthRef.current <= 0 && !gameEndedRef.current) {
+          gameEndedRef.current = true
+          endGame()
+          return
+        }
+
+        animFrameRef.current = requestAnimationFrame(gameLoop)
+      }
+
+      animFrameRef.current = requestAnimationFrame(gameLoop)
+    } catch (e) {
+      console.error('Start game error:', e)
+    } finally {
+      isStartingRef.current = false
+    }
+  }, [track, createSynths, scheduleSong, playHitSound, endGame])
+
+  const handleKeyDown = useCallback((e) => {
+    if (gameState === 'ready') {
+      startGame()
+      return
+    }
+
+    if (gameState !== 'playing') return
+
+    const laneIndex = keyConfig.lanes.indexOf(e.code)
+    if (laneIndex === -1) return
+
+    e.preventDefault()
+    if (gameDataRef.current.lanePressed[laneIndex]) return
+
+    gameDataRef.current.lanePressed[laneIndex] = true
+
+    let timeNow = 0
+    try {
+      timeNow = Tone.Transport.seconds
+    } catch(e) {}
+
+    const judgeType = judgeNote(laneIndex, timeNow)
+
+    if (judgeType) {
+      setJudgeFeedback({ type: judgeType, lane: laneIndex, id: Date.now() })
+      setTimeout(() => setJudgeFeedback(null), 400)
+    }
+  }, [gameState, keyConfig.lanes, judgeNote, startGame])
+
+  const handleKeyUp = useCallback((e) => {
+    const laneIndex = keyConfig.lanes.indexOf(e.code)
+    if (laneIndex === -1) return
+    gameDataRef.current.lanePressed[laneIndex] = false
+  }, [keyConfig.lanes])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
@@ -401,24 +533,45 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
   useEffect(() => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
-      Tone.Transport.stop()
-      Tone.Transport.cancel()
-      if (toneSynthRef.current) toneSynthRef.current.dispose()
-      if (toneBassRef.current) toneBassRef.current.dispose()
-      if (toneNoiseRef.current) toneNoiseRef.current.dispose()
-      if (toneAnalyserRef.current) toneAnalyserRef.current.dispose()
+
+      try {
+        Tone.Transport.stop()
+        Tone.Transport.cancel()
+      } catch(e) {}
+
+      try {
+          if (toneRef.current.leadSynth) toneRef.current.leadSynth.dispose()
+          if (toneRef.current.bassSynth) toneRef.current.bassSynth.dispose()
+          if (toneRef.current.padSynth) toneRef.current.padSynth.dispose()
+          if (toneRef.current.kickSynth) toneRef.current.kickSynth.dispose()
+          if (toneRef.current.snareSynth) toneRef.current.snareSynth.dispose()
+          if (toneRef.current.hihatSynth) toneRef.current.hihatSynth.dispose()
+          if (toneRef.current.snareFilter) toneRef.current.snareFilter.dispose()
+          if (toneRef.current.hihatFilter) toneRef.current.hihatFilter.dispose()
+          if (toneRef.current.analyser) toneRef.current.analyser.dispose()
+          if (toneRef.current.masterGain) toneRef.current.masterGain.dispose()
+          if (toneRef.current.reverb) toneRef.current.reverb.dispose()
+      } catch(e) {}
+
+      toneRef.current.audioReady = false
+      gameEndedRef.current = false
+      hasStartedRef.current = false
+      isStartingRef.current = false
     }
   }, [])
+
+  const handleStartClick = () => {
+    startGame()
+  }
 
   return (
     <div style={styles.container}>
       <CanvasRenderer
-        ref={canvasRef}
         track={track}
         keyConfig={keyConfig}
         gameDataRef={gameDataRef}
         currentTime={currentTime}
-        analyser={toneAnalyserRef.current}
+        analyser={toneRef.current.analyser}
         judgeFeedback={judgeFeedback}
       />
 
@@ -457,17 +610,19 @@ export default function Game({ track, keyConfig, onEnd, onQuit }) {
         ✕ 退出
       </button>
 
-      {gameState === 'loading' && (
-        <div style={styles.overlay}>
-          <div style={styles.loadingText}>加载中...</div>
-          <div style={styles.loadingSub}>初始化音频引擎</div>
-        </div>
-      )}
-
       {gameState === 'ready' && (
-        <div style={styles.overlay}>
-          <div style={styles.countdownText}>准备</div>
-          <div style={styles.countdownSub}>按 {keyConfig.labels.join(' / ')} 键演奏</div>
+        <div style={styles.overlay} onClick={handleStartClick}>
+          <div style={styles.readyCard}>
+            <div style={styles.readyTitle}>{track.title}</div>
+            <div style={styles.readySub}>{track.artist} · {track.difficulty}</div>
+            <div style={styles.readyBpm}>BPM {track.bpm} · {track.notes.length} NOTES</div>
+            <div style={styles.startBtn}>
+              ▶ 点击开始
+            </div>
+            <div style={styles.startHint}>
+              或按任意游戏键（{keyConfig.labels.join(' ')}）开始
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -523,38 +678,56 @@ const styles = {
     position: 'absolute',
     inset: 0,
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'rgba(5,5,8,0.85)',
+    background: 'rgba(5,5,8,0.9)',
     zIndex: 50,
-    backdropFilter: 'blur(10px)'
+    backdropFilter: 'blur(15px)',
+    cursor: 'pointer'
   },
-  loadingText: {
-    fontSize: '48px',
-    fontWeight: 800,
-    letterSpacing: '8px',
-    color: '#fff',
-    marginBottom: '12px',
-    textShadow: '0 0 40px rgba(0,255,204,0.5)'
+  readyCard: {
+    textAlign: 'center',
+    padding: '48px 64px',
+    background: 'rgba(10,10,20,0.8)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '20px',
+    boxShadow: '0 20px 80px rgba(0,0,0,0.5)'
   },
-  loadingSub: {
-    fontSize: '14px',
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: '3px'
-  },
-  countdownText: {
-    fontSize: '72px',
+  readyTitle: {
+    fontSize: '42px',
     fontWeight: 900,
-    letterSpacing: '12px',
+    letterSpacing: '6px',
     background: 'linear-gradient(135deg, #ff3366, #00ffcc)',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
-    marginBottom: '16px'
+    marginBottom: '8px'
   },
-  countdownSub: {
+  readySub: {
     fontSize: '16px',
     color: 'rgba(255,255,255,0.5)',
-    letterSpacing: '4px'
+    marginBottom: '16px'
+  },
+  readyBpm: {
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.3)',
+    letterSpacing: '2px',
+    marginBottom: '36px'
+  },
+  startBtn: {
+    display: 'inline-block',
+    padding: '16px 48px',
+    background: 'linear-gradient(135deg, #ff3366 0%, #cc2255 100%)',
+    borderRadius: '12px',
+    color: '#fff',
+    fontSize: '18px',
+    fontWeight: 700,
+    letterSpacing: '4px',
+    boxShadow: '0 8px 40px rgba(255,51,102,0.4)',
+    marginBottom: '16px'
+  },
+  startHint: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '2px'
   }
 }

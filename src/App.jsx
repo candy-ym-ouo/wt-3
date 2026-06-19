@@ -3,7 +3,7 @@ import TrackSelect from './components/TrackSelect.jsx'
 import Game from './components/Game.jsx'
 import KeySettings from './components/KeySettings.jsx'
 import Result from './components/Result.jsx'
-import { defaultKeyConfig } from './data/tracks.js'
+import { defaultKeyConfig, tracks } from './data/tracks.js'
 
 export default function App() {
   const [screen, setScreen] = useState('select')
