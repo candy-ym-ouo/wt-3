@@ -746,6 +746,40 @@ export const getTrackWithDifficulty = (trackId, difficultyId) => {
   }
 }
 
+const getDifficultyName = (diffId) => {
+  return DIFFICULTIES[diffId?.toUpperCase()]?.name || diffId
+}
+
+const getDifficultyId = (diffName) => {
+  const entry = Object.values(DIFFICULTIES).find(d => d.name === diffName)
+  return entry?.id || diffName
+}
+
+const findBestRecord = (trackId, difficulty, bestRecords) => {
+  const diffName = getDifficultyName(difficulty)
+  const diffId = getDifficultyId(difficulty)
+  const keyWithName = `${trackId}_${diffName}`
+  const keyWithId = `${trackId}_${diffId}`
+
+  if (bestRecords[keyWithName]?.cleared) {
+    return bestRecords[keyWithName]
+  }
+  if (bestRecords[keyWithId]?.cleared) {
+    return bestRecords[keyWithId]
+  }
+  return null
+}
+
+const getClearedTrackCount = (bestRecords) => {
+  const clearedTracks = new Set()
+  Object.values(bestRecords).forEach(record => {
+    if (record.cleared && record.trackId) {
+      clearedTracks.add(record.trackId)
+    }
+  })
+  return clearedTracks.size
+}
+
 export const checkUnlockCondition = (condition, playerData, bestRecords = {}) => {
   if (!condition || condition.type === 'none') return { unlocked: true, reason: null }
 
@@ -757,17 +791,18 @@ export const checkUnlockCondition = (condition, playerData, bestRecords = {}) =>
       return { unlocked: false, reason: `需要等级 Lv.${condition.minLevel}` }
 
     case 'trackClear': {
-      const recordKey = `${condition.trackId}_${condition.difficulty || 'normal'}`
-      if (bestRecords[recordKey]?.cleared) {
+      const difficulty = condition.difficulty || 'normal'
+      const record = findBestRecord(condition.trackId, difficulty, bestRecords)
+      if (record) {
         return { unlocked: true, reason: null }
       }
       const trackName = getTrackById(condition.trackId)?.title || condition.trackId
-      const diffName = DIFFICULTIES[condition.difficulty?.toUpperCase()]?.name || condition.difficulty || '普通'
+      const diffName = getDifficultyName(difficulty)
       return { unlocked: false, reason: `需要通关「${trackName}」(${diffName})` }
     }
 
     case 'clearedCount': {
-      const clearedCount = Object.values(bestRecords).filter(r => r.cleared).length
+      const clearedCount = getClearedTrackCount(bestRecords)
       if (clearedCount >= condition.count) {
         return { unlocked: true, reason: null }
       }

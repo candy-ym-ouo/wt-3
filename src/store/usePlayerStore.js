@@ -28,6 +28,13 @@ import {
   EVENT_BADGES
 } from '../data/challengeData.js'
 
+const DIFFICULTY_MAP = {
+  'easy': '简单', '简单': 'easy',
+  'normal': '普通', '普通': 'normal',
+  'hard': '困难', '困难': 'hard',
+  'expert': '专家', '专家': 'expert'
+}
+
 const STORAGE_KEY = 'rhythm_circle_player_data'
 const BEST_RECORDS_KEY = 'rhythm_circle_best_records'
 const HISTORY_KEY = 'rhythm_circle_history'
@@ -808,8 +815,10 @@ export function usePlayerStore() {
 
   const getBestRecord = useCallback((trackId, difficulty = null) => {
     if (difficulty) {
-      const recordKey = `${trackId}_${difficulty}`
-      return bestRecords[recordKey] || null
+      const altDifficulty = DIFFICULTY_MAP[difficulty] || difficulty
+      const recordKey1 = `${trackId}_${difficulty}`
+      const recordKey2 = `${trackId}_${altDifficulty}`
+      return bestRecords[recordKey1] || bestRecords[recordKey2] || null
     }
     const records = Object.values(bestRecords).filter(r => r.trackId === trackId)
     if (records.length === 0) return null
