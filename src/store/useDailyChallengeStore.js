@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore, useEffect } from 'react'
 import {
   generateDailyChallenge,
   getTodayKey,
@@ -23,27 +23,31 @@ const saveToStorage = (key, value) => {
   } catch (e) {}
 }
 
-const defaultState = () => {
+const buildFreshState = (dateKey) => {
+  const challenge = generateDailyChallenge(dateKey)
+  return {
+    dateKey,
+    challenge,
+    completionStatus: 'pending',
+    bestScore: 0,
+    bestAccuracy: 0,
+    attempts: 0,
+    passed: false,
+    lastPlayedAt: null
+  }
+}
+
+const initializeState = () => {
   const todayKey = getTodayKey()
-  const challenge = generateDailyChallenge(todayKey)
   const saved = loadFromStorage(STORAGE_KEY, {})
-  const leaderboard = loadFromStorage(LEADERBOARD_KEY, {})
 
   if (saved.dateKey !== todayKey) {
-    const freshState = {
-      dateKey: todayKey,
-      challenge,
-      completionStatus: 'pending',
-      bestScore: 0,
-      bestAccuracy: 0,
-      attempts: 0,
-      passed: false,
-      lastPlayedAt: null
-    }
-    saveToStorage(STORAGE_KEY, freshState)
-    return freshState
+    const fresh = buildFreshState(todayKey)
+    saveToStorage(STORAGE_KEY, fresh)
+    return fresh
   }
 
+  const challenge = generateDailyChallenge(todayKey)
   return {
     dateKey: saved.dateKey,
     challenge,
@@ -56,16 +60,67 @@ const defaultState = () => {
   }
 }
 
-let globalState = defaultState()
+let globalState = initializeState()
 const listeners = new Set()
+let pollTimer = null
+let visibilityHandler = null
 
 const notifyListeners = () => {
   listeners.forEach(fn => fn())
 }
 
+const ensurePollTimer = () => {
+  if (pollTimer) return
+  pollTimer = setInterval(() => {
+    checkAndRefresh()
+  }, 60 * 1000)
+}
+
+const cleanupPollTimer = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+const ensureVisibilityListener = () => {
+  if (visibilityHandler) return
+  visibilityHandler = () => {
+    if (document.visibilityState === 'visible') {
+      checkAndRefresh()
+    }
+  }
+  document.addEventListener('visibilitychange', visibilityHandler)
+}
+
+const cleanupVisibilityListener = () => {
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler)
+    visibilityHandler = null
+  }
+}
+
 const subscribe = (listener) => {
   listeners.add(listener)
-  return () => listeners.delete(listener)
+  ensurePollTimer()
+  ensureVisibilityListener()
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      cleanupPollTimer()
+      cleanupVisibilityListener()
+    }
+  }
+}
+
+const checkAndRefresh = () => {
+  const todayKey = getTodayKey()
+  if (globalState.dateKey !== todayKey) {
+    const fresh = buildFreshState(todayKey)
+    globalState = fresh
+    saveToStorage(STORAGE_KEY, globalState)
+    notifyListeners()
+  }
 }
 
 const getSnapshot = () => globalState
@@ -75,23 +130,6 @@ const setState = (updater) => {
   globalState = next
   saveToStorage(STORAGE_KEY, globalState)
   notifyListeners()
-}
-
-const checkAndRefresh = () => {
-  const todayKey = getTodayKey()
-  if (globalState.dateKey !== todayKey) {
-    const challenge = generateDailyChallenge(todayKey)
-    setState({
-      dateKey: todayKey,
-      challenge,
-      completionStatus: 'pending',
-      bestScore: 0,
-      bestAccuracy: 0,
-      attempts: 0,
-      passed: false,
-      lastPlayedAt: null
-    })
-  }
 }
 
 const submitDailyResult = (result) => {
@@ -146,6 +184,7 @@ const submitDailyResult = (result) => {
 }
 
 const getTodayLeaderboard = () => {
+  checkAndRefresh()
   const todayKey = getTodayKey()
   const leaderboard = loadFromStorage(LEADERBOARD_KEY, {})
   return leaderboard[todayKey] || []
@@ -176,21 +215,22 @@ const isDailyChallengeTrack = (trackId, difficultyId) => {
 
 const resetDailyChallenge = () => {
   const todayKey = getTodayKey()
-  const challenge = generateDailyChallenge(todayKey)
-  setState({
-    dateKey: todayKey,
-    challenge,
-    completionStatus: 'pending',
-    bestScore: 0,
-    bestAccuracy: 0,
-    attempts: 0,
-    passed: false,
-    lastPlayedAt: null
-  })
+  const fresh = buildFreshState(todayKey)
+  globalState = fresh
+  saveToStorage(STORAGE_KEY, globalState)
+  notifyListeners()
+}
+
+const forceRefresh = () => {
+  checkAndRefresh()
 }
 
 export function useDailyChallengeStore() {
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+
+  useEffect(() => {
+    checkAndRefresh()
+  }, [])
 
   return {
     dailyChallengeState: state,
@@ -200,6 +240,6 @@ export function useDailyChallengeStore() {
     getCompletionStatus,
     isDailyChallengeTrack,
     resetDailyChallenge,
-    checkAndRefresh
+    checkAndRefresh: forceRefresh
   }
 }
