@@ -3,6 +3,7 @@ import * as Tone from 'tone'
 import CanvasRenderer from './CanvasRenderer.jsx'
 import ScorePanel from './ScorePanel.jsx'
 import { usePracticeStore } from '../store/usePracticeStore.js'
+import { useCalibrationStore } from '../store/useCalibrationStore.js'
 
 const JUDGE_WINDOWS = {
   perfect: 0.05,
@@ -28,6 +29,13 @@ const JUDGE_RANK = {
 export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
+  const calibrationStore = useCalibrationStore()
+  const { calibration } = calibrationStore
+
+  const judgmentOffsetMs = calibration.judgmentOffset || 0
+  const audioOffsetMs = calibration.audioOffset || 0
+  const judgmentOffsetSec = judgmentOffsetMs / 1000
+  const audioOffsetSec = audioOffsetMs / 1000
 
   const tutorialPlaybackSpeed = isTutorialMode ? 0.6 : 1.0
   const tutorialJudgeMultiplier = isTutorialMode ? 1.5 : 1.0
@@ -239,7 +247,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     const scheduleNote = (note, callback, originalTime) => {
       if (originalTime < range.start - 0.5 || originalTime > range.end + 0.5) return null
 
-      const adjustedTime = originalTime
+      const adjustedTime = originalTime + audioOffsetSec
       const eid = Tone.Transport.schedule((time) => {
         try {
           callback(time, note)
@@ -291,7 +299,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     }
 
     toneRef.current.scheduledEvents = events
-  }, [track, practiceRange])
+  }, [track, practiceRange, audioOffsetSec])
 
   const playHitSound = useCallback((type) => {
     if (!toneRef.current.audioReady) return
@@ -355,7 +363,8 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     for (let i = 0; i < data.activeNotes.length; i++) {
       const note = data.activeNotes[i]
       if (note.lane !== lane || note.hit || note.missed) continue
-      const diff = Math.abs(note.time - timeNow)
+      const effectiveNoteTime = note.time + judgmentOffsetSec
+      const diff = Math.abs(effectiveNoteTime - timeNow)
       if (diff < closestDiff && diff < adjustedJudgeWindows.miss) {
         closestDiff = diff
         closestNote = { note, index: i }
@@ -465,7 +474,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     playHitSound(judgeType)
 
     return judgeType
-  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue])
+  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, judgmentOffsetSec])
 
   const getFilteredNotes = useCallback(() => {
     const range = practiceRange()
@@ -740,7 +749,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
         const adjustedMissWindow = JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
         activeData.activeNotes.forEach(note => {
-          if (!note.hit && !note.missed && note.time + adjustedMissWindow < now) {
+          if (!note.hit && !note.missed && note.time + judgmentOffsetSec + adjustedMissWindow < now) {
             note.missed = true
             const comboBefore = comboRef.current
             comboRef.current = 0

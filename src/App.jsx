@@ -11,6 +11,8 @@ import ActivityChallengeCenter from './components/ActivityChallengeCenter.jsx'
 import { defaultKeyConfig, tracks } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
+import { useCalibrationStore } from './store/useCalibrationStore.js'
+import CalibrationCenter from './components/CalibrationCenter.jsx'
 
 export default function App() {
   const [screen, setScreen] = useState('select')
@@ -28,6 +30,9 @@ export default function App() {
   const [selectedTutorialTrackIndex, setSelectedTutorialTrackIndex] = useState(-1)
   const [isTutorialGame, setIsTutorialGame] = useState(false)
   const [showTutorialComplete, setShowTutorialComplete] = useState(false)
+  const [showCalibrationCenter, setShowCalibrationCenter] = useState(false)
+
+  const calibrationStore = useCalibrationStore()
 
   const playerStore = usePlayerStore()
   const {
@@ -225,6 +230,7 @@ export default function App() {
           onOpenChallengeCenter={() => setShowChallengeCenter(true)}
           activeMultiplier={activeMultiplier}
           bestRecords={bestRecords}
+          onOpenCalibrationCenter={() => setShowCalibrationCenter(true)}
         />
       )}
       {screen === 'settings' && (
@@ -325,6 +331,12 @@ export default function App() {
           getEventTitles={playerStore.getEventTitles}
           getEventAchievements={playerStore.getEventAchievements}
           tracks={allTracks}
+        />
+      )}
+      {showCalibrationCenter && (
+        <CalibrationCenter
+          keyConfig={keyConfig}
+          onClose={() => setShowCalibrationCenter(false)}
         />
       )}
       {tutorialState.showTutorial && tutorialState.isInTutorialFlow && (
