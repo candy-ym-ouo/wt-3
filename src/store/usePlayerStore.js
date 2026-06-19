@@ -679,6 +679,33 @@ export function usePlayerStore() {
     const recordChecks = updateBestRecord(result, track)
     addToHistory(result, track)
 
+    const recordKey = `${track.id}_${track.difficulty}`
+    let updatedBestRecords = { ...bestRecords }
+    if (result.cleared) {
+      const existing = bestRecords[recordKey]
+      const hasNew = !existing || recordChecks.isNewBest || recordChecks.isNewAccuracy || recordChecks.isNewCombo
+      if (hasNew) {
+        updatedBestRecords = {
+          ...updatedBestRecords,
+          [recordKey]: {
+            trackId: track.id,
+            trackTitle: track.title,
+            difficulty: track.difficulty,
+            level: track.level,
+            artist: track.artist,
+            score: existing && !recordChecks.isNewBest ? existing.score : result.score,
+            rank: existing && !recordChecks.isNewBest ? existing.rank : result.rank,
+            accuracy: existing && !recordChecks.isNewAccuracy ? existing.accuracy : result.accuracy,
+            maxCombo: existing && !recordChecks.isNewCombo ? existing.maxCombo : result.maxCombo,
+            stats: existing && !recordChecks.isNewBest ? existing.stats : { ...result.stats },
+            totalNotes: existing && !recordChecks.isNewBest ? existing.totalNotes : result.totalNotes,
+            cleared: true,
+            updatedAt: new Date().toISOString()
+          }
+        }
+      }
+    }
+
     const record = {
       id: Date.now(),
       trackId: track.id,
@@ -723,7 +750,7 @@ export function usePlayerStore() {
       ]
     }
 
-    const newBadges = checkBadges(nextData, bestRecords)
+    const newBadges = checkBadges(nextData, updatedBestRecords)
     if (newBadges.length > 0) {
       nextData.unlockedBadges = [
         ...nextData.unlockedBadges,

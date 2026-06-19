@@ -78,7 +78,8 @@ export default function App() {
       gainedExp: growthResult.gainedExp,
       levelUps: growthResult.levelUps,
       newAchievements: growthResult.newAchievements,
-      newTitles: growthResult.newTitles
+      newTitles: growthResult.newTitles,
+      newBadges: growthResult.newBadges
     })
     setRecordChecks(growthResult.recordChecks)
     setGameResult(result)
