@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 
 export const LANE_COLOR_SCHEMES = [
   { id: 'classic', name: '经典', colors: ['#ff3366', '#ffcc00', '#00ffcc', '#6699ff'] },
@@ -63,42 +63,60 @@ const saveTheme = (theme) => {
   } catch (e) {}
 }
 
+let globalTheme = loadTheme()
+const listeners = new Set()
+
+const notifyListeners = () => {
+  listeners.forEach(fn => fn())
+}
+
+const subscribe = (listener) => {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+const getSnapshot = () => globalTheme
+
+const setThemeState = (updater) => {
+  const next = typeof updater === 'function' ? updater(globalTheme) : { ...globalTheme, ...updater }
+  globalTheme = next
+  saveTheme(globalTheme)
+  notifyListeners()
+}
+
+const setTheme = (updates) => {
+  setThemeState(prev => ({ ...prev, ...updates }))
+}
+
+const setLaneScheme = (id) => {
+  setTheme({ laneSchemeId: id })
+}
+
+const setHitEffect = (id) => {
+  setTheme({ hitEffectId: id })
+}
+
+const setBackground = (id) => {
+  setTheme({ backgroundId: id })
+}
+
+const setResultStyle = (id) => {
+  setTheme({ resultStyleId: id })
+}
+
+const resetTheme = () => {
+  globalTheme = { ...DEFAULT_THEME }
+  saveTheme(globalTheme)
+  notifyListeners()
+}
+
+const getLaneColors = () => {
+  const scheme = LANE_COLOR_SCHEMES.find(s => s.id === globalTheme.laneSchemeId)
+  return scheme ? scheme.colors : LANE_COLOR_SCHEMES[0].colors
+}
+
 export function useThemeStore() {
-  const [theme, setThemeState] = useState(loadTheme)
-
-  const setTheme = useCallback((updates) => {
-    setThemeState(prev => {
-      const next = { ...prev, ...updates }
-      saveTheme(next)
-      return next
-    })
-  }, [])
-
-  const setLaneScheme = useCallback((id) => {
-    setTheme({ laneSchemeId: id })
-  }, [setTheme])
-
-  const setHitEffect = useCallback((id) => {
-    setTheme({ hitEffectId: id })
-  }, [setTheme])
-
-  const setBackground = useCallback((id) => {
-    setTheme({ backgroundId: id })
-  }, [setTheme])
-
-  const setResultStyle = useCallback((id) => {
-    setTheme({ resultStyleId: id })
-  }, [setTheme])
-
-  const resetTheme = useCallback(() => {
-    setThemeState({ ...DEFAULT_THEME })
-    saveTheme(DEFAULT_THEME)
-  }, [])
-
-  const getLaneColors = useCallback(() => {
-    const scheme = LANE_COLOR_SCHEMES.find(s => s.id === theme.laneSchemeId)
-    return scheme ? scheme.colors : LANE_COLOR_SCHEMES[0].colors
-  }, [theme.laneSchemeId])
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   return {
     theme,
