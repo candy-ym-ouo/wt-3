@@ -9,6 +9,7 @@ import {
   EXP_RANK_BONUS,
   ACHIEVEMENTS,
   TITLES,
+  BADGES,
   DIFFICULTY_WEIGHT
 } from '../data/growthData.js'
 import {
@@ -67,6 +68,7 @@ const defaultPlayerData = {
   trackRecords: [],
   unlockedAchievements: [],
   unlockedTitles: [],
+  unlockedBadges: [],
   currentTitle: null,
   firstPlayDate: null,
   lastPlayDate: null
@@ -88,6 +90,7 @@ export function usePlayerStore() {
   const [newlyUnlocked, setNewlyUnlocked] = useState({
     achievements: [],
     titles: [],
+    badges: [],
     levelUps: []
   })
 
@@ -245,6 +248,18 @@ export function usePlayerStore() {
       if (!data.unlockedTitles.includes(title.id)) {
         if (title.check(data)) {
           unlocked.push(title)
+        }
+      }
+    })
+    return unlocked
+  }, [])
+
+  const checkBadges = useCallback((data, records) => {
+    const unlocked = []
+    BADGES.forEach(badge => {
+      if (!data.unlockedBadges.includes(badge.id)) {
+        if (badge.check(data, records)) {
+          unlocked.push(badge)
         }
       }
     })
@@ -708,10 +723,19 @@ export function usePlayerStore() {
       ]
     }
 
+    const newBadges = checkBadges(nextData, bestRecords)
+    if (newBadges.length > 0) {
+      nextData.unlockedBadges = [
+        ...nextData.unlockedBadges,
+        ...newBadges.map(b => b.id)
+      ]
+    }
+
     setPlayerData(nextData)
     setNewlyUnlocked({
       achievements: newAchievements,
       titles: newTitles,
+      badges: newBadges,
       levelUps
     })
 
@@ -720,12 +744,13 @@ export function usePlayerStore() {
       levelUps, 
       newAchievements, 
       newTitles,
+      newBadges,
       recordChecks,
       newlyCompletedTasks: newlyCompleted,
       expMultiplier: multiplier,
       baseExp
     }
-  }, [playerData, calculateGainedExp, checkAchievements, checkTitles, updateBestRecord, addToHistory, updateChallengeProgress, getActiveMultiplier])
+  }, [playerData, bestRecords, calculateGainedExp, checkAchievements, checkTitles, checkBadges, updateBestRecord, addToHistory, updateChallengeProgress, getActiveMultiplier])
 
   const getBestRecord = useCallback((trackId, difficulty = null) => {
     if (difficulty) {
@@ -795,6 +820,7 @@ export function usePlayerStore() {
     setNewlyUnlocked({
       achievements: [],
       titles: [],
+      badges: [],
       levelUps: []
     })
   }, [])
@@ -897,7 +923,7 @@ export function usePlayerStore() {
       setPlayerData({ ...defaultPlayerData })
       setBestRecords({})
       setPlayHistory([])
-      setNewlyUnlocked({ achievements: [], titles: [], levelUps: [] })
+      setNewlyUnlocked({ achievements: [], titles: [], badges: [], levelUps: [] })
       setChallengeData({ ...defaultChallengeData })
       setNewChallengeRewards([])
       resetTutorial()
@@ -913,6 +939,16 @@ export function usePlayerStore() {
       localStorage.removeItem(CHALLENGE_KEY)
     }
   }, [])
+
+  const getBadgeStats = useCallback(() => {
+    const total = BADGES.length
+    const unlocked = playerData.unlockedBadges.length
+    return {
+      total,
+      unlocked,
+      percent: total > 0 ? Math.round((unlocked / total) * 100) : 0
+    }
+  }, [playerData.unlockedBadges])
 
   return {
     playerData,
@@ -950,6 +986,8 @@ export function usePlayerStore() {
     clearNewChallengeRewards,
     getEventTitles,
     getEventAchievements,
-    getActiveMultiplier
+    getActiveMultiplier,
+    getBadgeStats,
+    checkBadges
   }
 }

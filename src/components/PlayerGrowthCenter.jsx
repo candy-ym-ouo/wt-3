@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ACHIEVEMENTS, TITLES, RANK_COLORS } from '../data/growthData.js'
+import { ACHIEVEMENTS, TITLES, RANK_COLORS, BADGES, BADGE_CATEGORIES, BADGE_CATEGORY_INFO, BADGE_RARITY_INFO } from '../data/growthData.js'
 
 export default function PlayerGrowthCenter({
   playerData,
@@ -34,6 +34,7 @@ export default function PlayerGrowthCenter({
         <div style={styles.tabs}>
           {[
             { id: 'overview', label: '📊 总览' },
+            { id: 'badges', label: '🏅 徽章' },
             { id: 'records', label: '🎵 曲目记录' },
             { id: 'achievements', label: '🏆 成就' },
             { id: 'titles', label: '🎖️ 称号' }
@@ -59,6 +60,9 @@ export default function PlayerGrowthCenter({
               expToNextLevel={expToNextLevel}
               currentTitleData={currentTitleData}
             />
+          )}
+          {activeTab === 'badges' && (
+            <BadgesTab playerData={playerData} />
           )}
           {activeTab === 'records' && (
             <RecordsTab records={sortedRecords} />
@@ -138,15 +142,15 @@ function OverviewTab({ playerData, expProgress, expToNextLevel, currentTitleData
           </div>
         </div>
         <div style={overviewStyles.statCard}>
-          <div style={overviewStyles.statTitle}>已解锁成就</div>
-          <div style={{ ...overviewStyles.statValue, color: '#ff3366' }}>
-            {playerData.unlockedAchievements.length} / {ACHIEVEMENTS.length}
+          <div style={overviewStyles.statTitle}>已解锁徽章</div>
+          <div style={{ ...overviewStyles.statValue, color: '#cc66ff' }}>
+            {playerData.unlockedBadges?.length || 0} / {BADGES.length}
           </div>
         </div>
         <div style={overviewStyles.statCard}>
-          <div style={overviewStyles.statTitle}>已解锁称号</div>
-          <div style={{ ...overviewStyles.statValue, color: '#6699ff' }}>
-            {playerData.unlockedTitles.length} / {TITLES.length}
+          <div style={overviewStyles.statTitle}>已解锁成就</div>
+          <div style={{ ...overviewStyles.statValue, color: '#ff3366' }}>
+            {playerData.unlockedAchievements.length} / {ACHIEVEMENTS.length}
           </div>
         </div>
       </div>
@@ -302,6 +306,84 @@ function TitlesTab({ playerData, onSelectTitle }) {
             ) : (
               <div style={titlesStyles.locked}>🔒 未解锁</div>
             )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function BadgesTab({ playerData }) {
+  const categories = Object.values(BADGE_CATEGORIES)
+
+  return (
+    <div style={badgesStyles.container}>
+      {categories.map(category => {
+        const categoryBadges = BADGES.filter(b => b.category === category)
+        const categoryInfo = BADGE_CATEGORY_INFO[category]
+        const unlockedCount = categoryBadges.filter(b => 
+          playerData.unlockedBadges.includes(b.id)
+        ).length
+
+        return (
+          <div key={category} style={badgesStyles.categorySection}>
+            <div style={badgesStyles.categoryHeader}>
+              <div style={{ ...badgesStyles.categoryTitle, color: categoryInfo.color }}>
+                {categoryInfo.icon} {categoryInfo.name}
+              </div>
+              <div style={badgesStyles.categoryProgress}>
+                {unlockedCount} / {categoryBadges.length}
+              </div>
+            </div>
+            <div style={badgesStyles.badgeGrid}>
+              {categoryBadges.map(badge => {
+                const unlocked = playerData.unlockedBadges.includes(badge.id)
+                const rarityInfo = BADGE_RARITY_INFO[badge.rarity]
+
+                return (
+                  <div
+                    key={badge.id}
+                    style={{
+                      ...badgesStyles.badgeCard,
+                      ...(unlocked ? badgesStyles.badgeCardUnlocked : {}),
+                      borderColor: unlocked ? rarityInfo.color + '55' : 'rgba(255,255,255,0.06)',
+                      background: unlocked ? rarityInfo.bgColor : 'rgba(255,255,255,0.02)'
+                    }}
+                  >
+                    <div style={{
+                      ...badgesStyles.badgeIcon,
+                      ...(unlocked ? badgesStyles.badgeIconUnlocked : badgesStyles.badgeIconLocked),
+                      color: rarityInfo.color,
+                      textShadow: unlocked ? `0 0 20px ${rarityInfo.color}66` : 'none'
+                    }}>
+                      {badge.icon}
+                    </div>
+                    <div style={badgesStyles.badgeInfo}>
+                      <div style={{
+                        ...badgesStyles.badgeName,
+                        ...(unlocked ? badgesStyles.badgeNameUnlocked : badgesStyles.badgeNameLocked)
+                      }}>
+                        {badge.name}
+                      </div>
+                      <div style={{
+                        ...badgesStyles.badgeDesc,
+                        ...(unlocked ? badgesStyles.badgeDescUnlocked : badgesStyles.badgeDescLocked)
+                      }}>
+                        {badge.description}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...badgesStyles.rarityBadge,
+                      color: rarityInfo.color,
+                      background: rarityInfo.bgColor,
+                      borderColor: rarityInfo.color + '44'
+                    }}>
+                      {rarityInfo.name}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
       })}
@@ -810,6 +892,107 @@ const titlesStyles = {
   locked: {
     fontSize: '12px',
     color: 'rgba(255,255,255,0.3)'
+  }
+}
+
+const badgesStyles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px'
+  },
+  categorySection: {
+    marginBottom: '8px'
+  },
+  categoryHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+    paddingBottom: '8px',
+    borderBottom: '1px solid rgba(255,255,255,0.06)'
+  },
+  categoryTitle: {
+    fontSize: '16px',
+    fontWeight: 700,
+    letterSpacing: '2px'
+  },
+  categoryProgress: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.5)',
+    fontFamily: 'monospace'
+  },
+  badgeGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '10px'
+  },
+  badgeCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '14px 16px',
+    border: '1px solid',
+    borderRadius: '12px',
+    opacity: 0.5,
+    filter: 'grayscale(0.7)',
+    transition: 'all 0.3s'
+  },
+  badgeCardUnlocked: {
+    opacity: 1,
+    filter: 'grayscale(0)',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+  },
+  badgeIcon: {
+    width: '52px',
+    height: '52px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '30px',
+    borderRadius: '12px',
+    flexShrink: 0
+  },
+  badgeIconUnlocked: {
+    background: 'rgba(255,255,255,0.08)'
+  },
+  badgeIconLocked: {
+    background: 'rgba(255,255,255,0.03)'
+  },
+  badgeInfo: {
+    flex: 1,
+    minWidth: 0
+  },
+  badgeName: {
+    fontSize: '14px',
+    fontWeight: 700,
+    marginBottom: '4px'
+  },
+  badgeNameUnlocked: {
+    color: '#fff'
+  },
+  badgeNameLocked: {
+    color: 'rgba(255,255,255,0.5)'
+  },
+  badgeDesc: {
+    fontSize: '11px',
+    lineHeight: 1.4
+  },
+  badgeDescUnlocked: {
+    color: 'rgba(255,255,255,0.6)'
+  },
+  badgeDescLocked: {
+    color: 'rgba(255,255,255,0.3)'
+  },
+  rarityBadge: {
+    padding: '4px 10px',
+    border: '1px solid',
+    borderRadius: '20px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px',
+    flexShrink: 0
   }
 }
 

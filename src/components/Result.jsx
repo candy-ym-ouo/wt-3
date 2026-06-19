@@ -529,6 +529,24 @@ export default function Result({
                 </div>
               </div>
             )}
+
+            {growthInfo.newBadges && growthInfo.newBadges.length > 0 && (
+              <div style={styles.unlockSection}>
+                <div style={styles.unlockTitle}>🏅 新徽章获得</div>
+                <div style={styles.unlockList}>
+                  {growthInfo.newBadges.map(b => (
+                    <div key={b.id} style={{
+                      ...styles.unlockItem,
+                      background: 'rgba(204,102,255,0.08)',
+                      borderColor: 'rgba(204,102,255,0.2)'
+                    }}>
+                      <span style={styles.unlockIcon}>{b.icon}</span>
+                      <span style={styles.unlockName}>{b.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
