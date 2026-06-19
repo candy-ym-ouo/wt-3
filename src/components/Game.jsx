@@ -26,7 +26,7 @@ const JUDGE_RANK = {
   miss: 1
 }
 
-export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, theme }) {
+export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, isDailyChallengeMode = false, dailyChallengeModifiers = null, theme }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
   const calibrationStore = useCalibrationStore()
@@ -39,6 +39,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
   const tutorialPlaybackSpeed = isTutorialMode ? 0.6 : 1.0
   const tutorialJudgeMultiplier = isTutorialMode ? 1.5 : 1.0
+  const dailyChallengePlaybackSpeed = (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) ? dailyChallengeModifiers.playbackSpeed : 1.0
 
   const [gameState, setGameState] = useState('ready')
   const [score, setScore] = useState(0)
@@ -55,7 +56,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     miss: 0
   })
   const [showPracticePanel, setShowPracticePanel] = useState(false)
-  const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(practiceSettings.playbackSpeed)
+  const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState(() => {
+    if (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) return dailyChallengeModifiers.playbackSpeed
+    return practiceSettings.playbackSpeed
+  })
 
   const gameDataRef = useRef({
     notes: [],
@@ -232,11 +236,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
   const updatePlaybackSpeed = useCallback((speed) => {
     try {
-      const actualSpeed = isTutorialMode ? tutorialPlaybackSpeed : speed
+      let actualSpeed = speed
+      if (isTutorialMode) actualSpeed = tutorialPlaybackSpeed
+      if (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) actualSpeed = dailyChallengeModifiers.playbackSpeed
       Tone.Transport.playbackRate = actualSpeed
       setCurrentPlaybackSpeed(actualSpeed)
     } catch(e) {}
-  }, [isTutorialMode, tutorialPlaybackSpeed])
+  }, [isTutorialMode, tutorialPlaybackSpeed, isDailyChallengeMode, dailyChallengeModifiers])
 
   const scheduleSong = useCallback(() => {
     const { songData } = track
@@ -411,6 +417,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
     if (judgeType === 'miss') {
       healthRef.current = Math.max(0, healthRef.current - 8)
+      if (isDailyChallengeMode && dailyChallengeModifiers?.suddenDeath) {
+        healthRef.current = 0
+      }
     } else if (judgeType === 'good') {
       healthRef.current = Math.min(100, healthRef.current + 2)
     } else if (judgeType === 'great') {
@@ -581,7 +590,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       try {
         Tone.Transport.stop()
         Tone.Transport.cancel()
-        Tone.Transport.playbackRate = isTutorialMode ? tutorialPlaybackSpeed : 1.0
+        Tone.Transport.playbackRate = isTutorialMode ? tutorialPlaybackSpeed : (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed ? dailyChallengeModifiers.playbackSpeed : 1.0)
         Tone.Transport.position = 0
       } catch(e) {}
 
@@ -981,6 +990,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         judgeFeedback={judgeFeedback}
         practiceRange={range}
         theme={theme}
+        hiddenNotes={isDailyChallengeMode && dailyChallengeModifiers?.hiddenNotes}
       />
 
       <ScorePanel
@@ -1030,6 +1040,25 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
           <span style={styles.tutorialText}>教学模式</span>
           <span style={styles.tutorialSpeedBadge}>{tutorialPlaybackSpeed}x 速度</span>
           <span style={styles.tutorialJudgeBadge}>判定窗口 +50%</span>
+        </div>
+      )}
+
+      {isDailyChallengeMode && (
+        <div style={styles.dailyChallengeIndicator}>
+          <span style={styles.dailyChallengeIcon}>☀️</span>
+          <span style={styles.dailyChallengeText}>每日挑战</span>
+          {dailyChallengeModifiers?.playbackSpeed > 1 && (
+            <span style={styles.dailyChallengeSpeedBadge}>{dailyChallengeModifiers.playbackSpeed}x</span>
+          )}
+          {dailyChallengeModifiers?.suddenDeath && (
+            <span style={styles.dailyChallengeConstraintBadge}>💀 一命通关</span>
+          )}
+          {dailyChallengeModifiers?.hiddenNotes && (
+            <span style={styles.dailyChallengeConstraintBadge}>👻 隐身音符</span>
+          )}
+          {!dailyChallengeModifiers?.allowMiss && (
+            <span style={styles.dailyChallengeConstraintBadge}>💎 零失误</span>
+          )}
         </div>
       )}
 
@@ -1609,6 +1638,48 @@ const styles = {
     borderRadius: '6px',
     fontSize: '11px',
     color: '#6699ff',
+    fontWeight: 600
+  },
+  dailyChallengeIndicator: {
+    position: 'absolute',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 20px',
+    background: 'linear-gradient(135deg, rgba(255,153,0,0.25), rgba(255,204,0,0.15))',
+    border: '1px solid rgba(255,153,0,0.5)',
+    borderRadius: '12px',
+    zIndex: 20,
+    backdropFilter: 'blur(10px)'
+  },
+  dailyChallengeIcon: {
+    fontSize: '20px'
+  },
+  dailyChallengeText: {
+    fontSize: '13px',
+    fontWeight: 800,
+    color: '#ff9900',
+    letterSpacing: '2px'
+  },
+  dailyChallengeSpeedBadge: {
+    padding: '4px 10px',
+    background: 'rgba(255,51,102,0.15)',
+    border: '1px solid rgba(255,51,102,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#ff3366',
+    fontWeight: 700
+  },
+  dailyChallengeConstraintBadge: {
+    padding: '4px 10px',
+    background: 'rgba(204,102,255,0.15)',
+    border: '1px solid rgba(204,102,255,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#cc66ff',
     fontWeight: 600
   },
   tutorialReadyOverlay: {

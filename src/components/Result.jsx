@@ -27,7 +27,9 @@ export default function Result({
   getReplayAnalysis,
   trackReplays,
   onDeleteReplay,
-  theme
+  theme,
+  isDailyChallengeMode = false,
+  dailyChallengeResult = null
 }) {
   const resultStyle = theme?.resultStyleId || 'neon'
   const [animatedStats, setAnimatedStats] = useState({
@@ -370,6 +372,31 @@ export default function Result({
               <span style={styles.bestRecordAcc}>
                 · {bestRecord.accuracy.toFixed(2)}%
               </span>
+            </div>
+          )}
+          {isDailyChallengeMode && dailyChallengeResult && (
+            <div style={styles.dailyChallengeResultBanner}>
+              <div style={styles.dailyChallengeResultHeader}>
+                <span style={styles.dailyChallengeResultIcon}>☀️</span>
+                <span style={styles.dailyChallengeResultTitle}>每日挑战结果</span>
+              </div>
+              {dailyChallengeResult.passed ? (
+                <div style={styles.dailyChallengeResultPassed}>
+                  ✅ 挑战通过！+{dailyChallengeResult.expReward} EXP
+                </div>
+              ) : (
+                <div style={styles.dailyChallengeResultFailed}>
+                  ❌ 挑战未通过
+                  {dailyChallengeResult.failedConstraints?.length > 0 && (
+                    <div style={styles.dailyChallengeResultReasons}>
+                      {dailyChallengeResult.failedConstraints.map((reason, i) => (
+                        <span key={i} style={styles.dailyChallengeResultReason}>{reason}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={styles.dailyChallengeResultPartial}>+{dailyChallengeResult.expReward} EXP (30%)</div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1906,6 +1933,56 @@ const styles = {
     fontSize: '11px',
     color: 'rgba(255,255,255,0.3)',
     textAlign: 'center'
+  },
+  dailyChallengeResultBanner: {
+    marginTop: '12px',
+    padding: '14px 18px',
+    background: 'linear-gradient(135deg, rgba(255,153,0,0.1), rgba(255,204,0,0.05))',
+    border: '1px solid rgba(255,153,0,0.25)',
+    borderRadius: '12px'
+  },
+  dailyChallengeResultHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px'
+  },
+  dailyChallengeResultIcon: {
+    fontSize: '18px'
+  },
+  dailyChallengeResultTitle: {
+    fontSize: '14px',
+    fontWeight: 800,
+    color: '#ff9900',
+    letterSpacing: '2px'
+  },
+  dailyChallengeResultPassed: {
+    fontSize: '16px',
+    fontWeight: 700,
+    color: '#00ffcc'
+  },
+  dailyChallengeResultFailed: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  dailyChallengeResultReasons: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    marginTop: '4px'
+  },
+  dailyChallengeResultReason: {
+    padding: '2px 8px',
+    background: 'rgba(255,51,102,0.15)',
+    borderRadius: '4px',
+    fontSize: '11px',
+    color: '#ff6666'
+  },
+  dailyChallengeResultPartial: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: '4px'
   }
 }
 

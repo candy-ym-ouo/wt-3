@@ -21,7 +21,9 @@ export default function ActivityChallengeCenter({
   getTaskStatus,
   getEventTitles,
   getEventAchievements,
-  tracks
+  tracks,
+  dailyChallengeState,
+  onOpenDailyChallenge
 }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [selectedActivity, setSelectedActivity] = useState(null)
@@ -102,7 +104,8 @@ export default function ActivityChallengeCenter({
         <div style={styles.tabs}>
           {[
             { id: 'overview', label: '📊 总览' },
-            { id: 'daily', label: '☀️ 每日任务' },
+            { id: 'daily_challenge', label: '☀️ 每日挑战' },
+            { id: 'daily', label: '📋 每日任务' },
             { id: 'weekly', label: '📅 每周挑战' },
             { id: 'activities', label: '🎪 活动专区' },
             { id: 'rewards', label: '🎁 奖励收藏' }
@@ -133,6 +136,12 @@ export default function ActivityChallengeCenter({
         </div>
 
         <div style={styles.content}>
+          {activeTab === 'daily_challenge' && (
+            <DailyChallengeTab
+              dailyChallengeState={dailyChallengeState}
+              onOpenDailyChallenge={onOpenDailyChallenge}
+            />
+          )}
           {activeTab === 'overview' && (
             <OverviewTab
               activeActivities={activeActivities}
@@ -748,6 +757,69 @@ function RewardsTab({
           <div style={commonStyles.emptyHint}>完成挑战任务即可获得丰厚奖励！</div>
         </div>
       )}
+    </div>
+  )
+}
+
+function DailyChallengeTab({ dailyChallengeState, onOpenDailyChallenge }) {
+  if (!dailyChallengeState) return null
+
+  const { challenge, completionStatus, bestScore, attempts, passed } = dailyChallengeState
+
+  return (
+    <div style={dcTabStyles.container}>
+      <div
+        style={dcTabStyles.card}
+        onClick={onOpenDailyChallenge}
+      >
+        <div style={dcTabStyles.cardHeader}>
+          <div style={dcTabStyles.icon}>☀️</div>
+          <div style={dcTabStyles.cardInfo}>
+            <div style={dcTabStyles.cardTitle}>今日每日挑战</div>
+            <div style={dcTabStyles.cardDesc}>
+              {challenge?.trackTitle} · {challenge?.difficultyName}
+            </div>
+          </div>
+          <div style={dcTabStyles.cardArrow}>→</div>
+        </div>
+        <div style={dcTabStyles.constraints}>
+          {challenge?.constraints?.map((c, i) => (
+            <span key={i} style={dcTabStyles.constraintBadge}>
+              {c.icon} {c.name}
+            </span>
+          ))}
+        </div>
+        <div style={dcTabStyles.cardStats}>
+          <div style={dcTabStyles.statItem}>
+            <div style={dcTabStyles.statValue}>{attempts}</div>
+            <div style={dcTabStyles.statLabel}>次数</div>
+          </div>
+          <div style={dcTabStyles.statItem}>
+            <div style={dcTabStyles.statValue}>{bestScore.toLocaleString()}</div>
+            <div style={dcTabStyles.statLabel}>最高分</div>
+          </div>
+          <div style={dcTabStyles.statItem}>
+            <div style={{ ...dcTabStyles.statValue, color: passed ? '#00ffcc' : '#ff6666' }}>
+              {passed ? '✅ 通过' : attempts > 0 ? '❌ 未通过' : '🎯 待挑战'}
+            </div>
+            <div style={dcTabStyles.statLabel}>状态</div>
+          </div>
+        </div>
+        <div style={dcTabStyles.cardAction}>
+          点击查看详情并开始挑战 →
+        </div>
+      </div>
+
+      <div style={dcTabStyles.infoSection}>
+        <div style={dcTabStyles.infoTitle}>💡 关于每日挑战</div>
+        <div style={dcTabStyles.infoList}>
+          <div style={dcTabStyles.infoItem}>每天 00:00 自动刷新，所有玩家面对相同挑战</div>
+          <div style={dcTabStyles.infoItem}>基于日期确定性生成曲目、难度和限制条件</div>
+          <div style={dcTabStyles.infoItem}>完成所有限制条件即为通过，获得全额经验奖励</div>
+          <div style={dcTabStyles.infoItem}>未通过也可获得 30% 经验奖励</div>
+          <div style={dcTabStyles.infoItem}>独立的每日挑战排行榜记录每次成绩</div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1661,5 +1733,115 @@ const commonStyles = {
   emptyHint: {
     fontSize: '13px',
     color: 'rgba(255,255,255,0.3)'
+  }
+}
+
+const dcTabStyles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px'
+  },
+  card: {
+    padding: '24px',
+    background: 'linear-gradient(135deg, rgba(255,153,0,0.08), rgba(255,204,0,0.04))',
+    border: '1px solid rgba(255,153,0,0.2)',
+    borderRadius: '16px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    marginBottom: '16px'
+  },
+  icon: {
+    fontSize: '40px'
+  },
+  cardInfo: {
+    flex: 1
+  },
+  cardTitle: {
+    fontSize: '18px',
+    fontWeight: 800,
+    color: '#ff9900',
+    marginBottom: '4px'
+  },
+  cardDesc: {
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  cardArrow: {
+    fontSize: '24px',
+    color: 'rgba(255,153,0,0.5)'
+  },
+  constraints: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '16px'
+  },
+  constraintBadge: {
+    padding: '4px 12px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.7)'
+  },
+  cardStats: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '12px',
+    marginBottom: '12px'
+  },
+  statItem: {
+    textAlign: 'center',
+    padding: '12px',
+    background: 'rgba(255,255,255,0.02)',
+    borderRadius: '10px'
+  },
+  statValue: {
+    fontSize: '16px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    color: '#ff9900',
+    marginBottom: '4px'
+  },
+  statLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px'
+  },
+  cardAction: {
+    textAlign: 'center',
+    fontSize: '13px',
+    color: 'rgba(255,153,0,0.7)',
+    fontWeight: 600
+  },
+  infoSection: {
+    padding: '20px',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.05)',
+    borderRadius: '12px'
+  },
+  infoTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: '12px'
+  },
+  infoList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  infoItem: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)',
+    paddingLeft: '10px',
+    borderLeft: '2px solid rgba(255,153,0,0.2)'
   }
 }

@@ -7,7 +7,8 @@ export default function CanvasRenderer({
   currentTime,
   analyser,
   judgeFeedback,
-  theme
+  theme,
+  hiddenNotes = false
 }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
@@ -467,7 +468,12 @@ export default function CanvasRenderer({
 
         const scale = 0.25 + progress * 0.75
         const size = (laneWidth / 2) * scale
-        const alpha = Math.min(1, Math.max(0, progress * 1.8))
+        let alpha = Math.min(1, Math.max(0, progress * 1.8))
+        if (hiddenNotes && progress < 0.7) {
+          alpha = 0
+        } else if (hiddenNotes && progress < 0.85) {
+          alpha = alpha * ((progress - 0.7) / 0.15)
+        }
 
         const color = keyConfig.colors[note.lane]
         const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')

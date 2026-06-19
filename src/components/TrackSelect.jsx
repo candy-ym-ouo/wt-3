@@ -19,7 +19,9 @@ export default function TrackSelect({
   activeMultiplier,
   bestRecords,
   onOpenCalibrationCenter,
-  onOpenThemeWorkshop
+  onOpenThemeWorkshop,
+  dailyChallengeState,
+  onOpenDailyChallenge
 }) {
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
@@ -301,6 +303,35 @@ export default function TrackSelect({
                 <span style={styles.challengeAlertDesc}>点击前往挑战中心查看</span>
               </div>
               <span style={styles.challengeAlertArrow}>→</span>
+            </div>
+          )}
+
+          {dailyChallengeState && (
+            <div
+              style={styles.dailyChallengeBanner}
+              onClick={onOpenDailyChallenge}
+            >
+              <div style={styles.dailyChallengeBannerLeft}>
+                <span style={styles.dailyChallengeBannerIcon}>☀️</span>
+                <div style={styles.dailyChallengeBannerInfo}>
+                  <span style={styles.dailyChallengeBannerTitle}>每日挑战</span>
+                  <span style={styles.dailyChallengeBannerTrack}>
+                    {dailyChallengeState.challenge?.trackTitle} · {dailyChallengeState.challenge?.difficultyName}
+                    <span style={{ margin: '0 6px', opacity: 0.4 }}>|</span>
+                    {dailyChallengeState.challenge?.constraints?.length || 0} 个限制条件
+                  </span>
+                </div>
+              </div>
+              <div style={styles.dailyChallengeBannerRight}>
+                {dailyChallengeState.passed ? (
+                  <span style={styles.dailyChallengePassed}>✅ 已通过</span>
+                ) : dailyChallengeState.attempts > 0 ? (
+                  <span style={styles.dailyChallengeFailed}>❌ 未通过</span>
+                ) : (
+                  <span style={styles.dailyChallengePending}>🎯 待挑战</span>
+                )}
+                <span style={styles.dailyChallengeBannerArrow}>→</span>
+              </div>
             </div>
           )}
 
@@ -1704,5 +1735,73 @@ const styles = {
     fontSize: '20px',
     color: 'rgba(255,204,0,0.6)',
     flexShrink: 0
+  },
+  dailyChallengeBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '16px 20px',
+    background: 'linear-gradient(135deg, rgba(255,153,0,0.12), rgba(255,204,0,0.06))',
+    border: '1px solid rgba(255,153,0,0.25)',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    marginBottom: '8px'
+  },
+  dailyChallengeBannerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px'
+  },
+  dailyChallengeBannerIcon: {
+    fontSize: '28px'
+  },
+  dailyChallengeBannerInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+  },
+  dailyChallengeBannerTitle: {
+    fontSize: '15px',
+    fontWeight: 800,
+    color: '#ff9900',
+    letterSpacing: '2px'
+  },
+  dailyChallengeBannerTrack: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  dailyChallengeBannerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  dailyChallengePassed: {
+    padding: '4px 12px',
+    background: 'rgba(0,255,204,0.15)',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#00ffcc'
+  },
+  dailyChallengeFailed: {
+    padding: '4px 12px',
+    background: 'rgba(255,51,102,0.15)',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#ff6666'
+  },
+  dailyChallengePending: {
+    padding: '4px 12px',
+    background: 'rgba(255,153,0,0.15)',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#ff9900'
+  },
+  dailyChallengeBannerArrow: {
+    fontSize: '18px',
+    color: 'rgba(255,153,0,0.6)'
   }
 }

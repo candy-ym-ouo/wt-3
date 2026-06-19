@@ -8,11 +8,14 @@ import PlayerGrowthCenter from './components/PlayerGrowthCenter.jsx'
 import PracticeLab from './components/PracticeLab.jsx'
 import Tutorial from './components/Tutorial.jsx'
 import ActivityChallengeCenter from './components/ActivityChallengeCenter.jsx'
-import { defaultKeyConfig, tracks } from './data/tracks.js'
+import DailyChallenge from './components/DailyChallenge.jsx'
+import { defaultKeyConfig, tracks, getTrackWithDifficulty } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
 import { useCalibrationStore } from './store/useCalibrationStore.js'
 import { useThemeStore } from './store/useThemeStore.js'
+import { useDailyChallengeStore } from './store/useDailyChallengeStore.js'
+import { getConstraintModifiers } from './data/dailyChallengeData.js'
 import CalibrationCenter from './components/CalibrationCenter.jsx'
 import ThemeWorkshop from './components/ThemeWorkshop.jsx'
 
@@ -34,9 +37,14 @@ export default function App() {
   const [showTutorialComplete, setShowTutorialComplete] = useState(false)
   const [showCalibrationCenter, setShowCalibrationCenter] = useState(false)
   const [showThemeWorkshop, setShowThemeWorkshop] = useState(false)
+  const [showDailyChallenge, setShowDailyChallenge] = useState(false)
+  const [isDailyChallengeMode, setIsDailyChallengeMode] = useState(false)
+  const [dailyChallengeModifiers, setDailyChallengeModifiers] = useState(null)
+  const [dailyChallengeResult, setDailyChallengeResult] = useState(null)
 
   const calibrationStore = useCalibrationStore()
   const themeStore = useThemeStore()
+  const dailyChallengeStore = useDailyChallengeStore()
 
   const themedKeyConfig = useMemo(() => ({
     ...keyConfig,
@@ -87,6 +95,21 @@ export default function App() {
     setShowTutorialComplete(false)
   }, [])
 
+  const handleStartDailyChallenge = useCallback(() => {
+    const state = dailyChallengeStore.dailyChallengeState
+    const challenge = state.challenge
+    const trackWithDiff = getTrackWithDifficulty(challenge.trackId, challenge.difficultyId)
+    if (!trackWithDiff) return
+    const modifiers = getConstraintModifiers(challenge.constraints)
+    clearTutorialState()
+    setSelectedTrack(trackWithDiff)
+    setIsDailyChallengeMode(true)
+    setDailyChallengeModifiers(modifiers)
+    setDailyChallengeResult(null)
+    setShowDailyChallenge(false)
+    setScreen('game')
+  }, [dailyChallengeStore])
+
   const handleGameEnd = (result) => {
     const growthResult = playerStore.processGameResult(result, selectedTrack)
     setGrowthInfo({
@@ -99,6 +122,11 @@ export default function App() {
     setRecordChecks(growthResult.recordChecks)
     setGameResult(result)
     setScreen('result')
+
+    if (isDailyChallengeMode) {
+      const dailyResult = dailyChallengeStore.submitDailyResult(result)
+      setDailyChallengeResult(dailyResult)
+    }
 
     if (isTutorialGame && result.cleared) {
       markFirstGameCompleted()
@@ -115,6 +143,9 @@ export default function App() {
     setEditingTrack(null)
     setPracticeSection(null)
     setRecordChecks(null)
+    setIsDailyChallengeMode(false)
+    setDailyChallengeModifiers(null)
+    setDailyChallengeResult(null)
     setScreen('select')
     playerStore.clearNewlyUnlocked()
   }
@@ -241,6 +272,8 @@ export default function App() {
           bestRecords={bestRecords}
           onOpenCalibrationCenter={() => setShowCalibrationCenter(true)}
           onOpenThemeWorkshop={() => setShowThemeWorkshop(true)}
+          dailyChallengeState={dailyChallengeStore.dailyChallengeState}
+          onOpenDailyChallenge={() => setShowDailyChallenge(true)}
         />
       )}
       {screen === 'settings' && (
@@ -286,6 +319,8 @@ export default function App() {
           isPracticeMode={practiceSection !== null}
           practiceSection={practiceSection}
           isTutorialMode={isTutorialGame}
+          isDailyChallengeMode={isDailyChallengeMode}
+          dailyChallengeModifiers={dailyChallengeModifiers}
           theme={themeStore.theme}
         />
       )}
@@ -321,6 +356,8 @@ export default function App() {
           trackReplays={playerStore.getTrackReplays(selectedTrack.id, selectedTrack.difficulty)}
           onDeleteReplay={playerStore.deleteReplay}
           theme={themeStore.theme}
+          isDailyChallengeMode={isDailyChallengeMode}
+          dailyChallengeResult={dailyChallengeResult}
         />
       )}
       {showGrowthCenter && (
@@ -342,6 +379,17 @@ export default function App() {
           getTaskStatus={playerStore.getTaskStatus}
           getEventTitles={playerStore.getEventTitles}
           getEventAchievements={playerStore.getEventAchievements}
+          tracks={allTracks}
+          dailyChallengeState={dailyChallengeStore.dailyChallengeState}
+          onOpenDailyChallenge={() => { setShowChallengeCenter(false); setShowDailyChallenge(true) }}
+        />
+      )}
+      {showDailyChallenge && (
+        <DailyChallenge
+          dailyChallengeState={dailyChallengeStore.dailyChallengeState}
+          getTodayLeaderboard={dailyChallengeStore.getTodayLeaderboard}
+          onStartChallenge={handleStartDailyChallenge}
+          onClose={() => setShowDailyChallenge(false)}
           tracks={allTracks}
         />
       )}
