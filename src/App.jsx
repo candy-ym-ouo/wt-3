@@ -12,6 +12,8 @@ import DailyChallenge from './components/DailyChallenge.jsx'
 import StoryMode from './components/StoryMode.jsx'
 import StoryDialogue from './components/StoryDialogue.jsx'
 import StoryResult from './components/StoryResult.jsx'
+import CustomTrackImporter from './components/CustomTrackImporter.jsx'
+import { ToastContainer } from './components/Toast.jsx'
 import { defaultKeyConfig, tracks, getTrackWithDifficulty } from './data/tracks.js'
 import { tutorialTrack, resetTutorial } from './data/tutorialData.js'
 import { usePlayerStore } from './store/usePlayerStore.js'
@@ -51,6 +53,7 @@ export default function App() {
   const [currentStoryStage, setCurrentStoryStage] = useState(null)
   const [storyResultData, setStoryResultData] = useState(null)
   const [showStoryResult, setShowStoryResult] = useState(false)
+  const [showImporter, setShowImporter] = useState(false)
 
   const calibrationStore = useCalibrationStore()
   const storyStore = useStoryStore()
@@ -255,6 +258,18 @@ export default function App() {
     alert('谱面已保存！')
   }
 
+  const handleImportTrack = useCallback((importedTrack) => {
+    setCustomTracks(prev => {
+      const existing = prev.findIndex(t => t.id === importedTrack.id)
+      if (existing >= 0) {
+        const updated = [...prev]
+        updated[existing] = importedTrack
+        return updated
+      }
+      return [...prev, importedTrack]
+    })
+  }, [])
+
   const handlePlayFromEditor = (track) => {
     clearTutorialState()
     setSelectedTrack(track)
@@ -351,6 +366,7 @@ export default function App() {
           dailyChallengeState={dailyChallengeStore.dailyChallengeState}
           onOpenDailyChallenge={() => setShowDailyChallenge(true)}
           onOpenStoryMode={() => setShowStoryMode(true)}
+          onOpenImporter={() => setShowImporter(true)}
         />
       )}
       {screen === 'settings' && (
@@ -525,6 +541,13 @@ export default function App() {
           onTrackSelect={handleTutorialTrackIndexSelect}
         />
       )}
+      <ToastContainer />
+      <CustomTrackImporter
+        isOpen={showImporter}
+        onClose={() => setShowImporter(false)}
+        onImport={handleImportTrack}
+        existingTracks={allTracks}
+      />
     </div>
   )
 }

@@ -22,7 +22,8 @@ export default function TrackSelect({
   onOpenThemeWorkshop,
   dailyChallengeState,
   onOpenDailyChallenge,
-  onOpenStoryMode
+  onOpenStoryMode,
+  onOpenImporter
 }) {
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
@@ -197,11 +198,26 @@ export default function TrackSelect({
     : { unlocked: true, reason: null }
 
   const packUnlockChecks = useMemo(() => {
-    return TRACK_PACKS.map(pack => ({
+    const basePacks = TRACK_PACKS.map(pack => ({
       ...pack,
       unlock: checkUnlockCondition(pack.unlockCondition, playerData, bestRecords)
     }))
-  }, [playerData, bestRecords])
+    const customCount = tracks.filter(t => t.isCustom).length
+    basePacks.push({
+      id: 'custom',
+      name: '自定义曲库',
+      description: '导入的自定义曲目',
+      icon: '📁',
+      color: '#00ffcc',
+      order: 99,
+      unlockCondition: { type: 'none' },
+      trackIds: tracks.filter(t => t.isCustom).map(t => t.id),
+      customCount,
+      unlock: { unlocked: true, reason: null }
+    })
+    basePacks.sort((a, b) => (a.order || 0) - (b.order || 0))
+    return basePacks
+  }, [playerData, bestRecords, tracks])
 
   return (
     <div
@@ -273,6 +289,23 @@ export default function TrackSelect({
           </button>
           <button style={styles.editorBtn} onClick={onOpenEditor}>
             ✎ 谱面编辑器
+          </button>
+          <button
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,51,102,0.12), rgba(0,255,204,0.08))',
+              border: '1px solid rgba(0,255,204,0.3)',
+              color: '#00ffcc',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 600,
+              backdropFilter: 'blur(10px)',
+              transition: 'all 0.2s'
+            }}
+            onClick={onOpenImporter}
+          >
+            📥 导入曲目
           </button>
           <button style={styles.settingsBtn} onClick={onOpenSettings}>
             ⚙ 键位设置
