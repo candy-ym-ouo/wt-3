@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import TrackSelect from './components/TrackSelect.jsx'
 import Game from './components/Game.jsx'
 import KeySettings from './components/KeySettings.jsx'
@@ -13,6 +13,7 @@ export default function App() {
   const [keyConfig, setKeyConfig] = useState(defaultKeyConfig)
   const [gameResult, setGameResult] = useState(null)
   const [customTracks, setCustomTracks] = useState([])
+  const [isEditingMode, setIsEditingMode] = useState(false)
 
   const handleSelectTrack = (track) => {
     setSelectedTrack(track)
@@ -27,12 +28,24 @@ export default function App() {
   const handleBackToSelect = () => {
     setSelectedTrack(null)
     setGameResult(null)
+    setIsEditingMode(false)
+    setEditingTrack(null)
     setScreen('select')
   }
 
   const handleOpenEditor = (track) => {
-    setEditingTrack(track || null)
+    if (track) {
+      const existingCustom = customTracks.find(t => t.id === track.id)
+      setEditingTrack(existingCustom || { ...track })
+    } else {
+      setEditingTrack(null)
+    }
+    setIsEditingMode(true)
     setScreen('editor')
+  }
+
+  const handleEditorChange = (track) => {
+    setEditingTrack(track)
   }
 
   const handleSaveTrack = (track) => {
@@ -45,6 +58,7 @@ export default function App() {
       }
       return [...prev, track]
     })
+    setEditingTrack(track)
     alert('谱面已保存！')
   }
 
@@ -53,7 +67,12 @@ export default function App() {
     setScreen('game')
   }
 
-  const allTracks = [...tracks, ...customTracks]
+  const allTracks = useMemo(() => {
+    const trackMap = new Map()
+    tracks.forEach(t => trackMap.set(t.id, t))
+    customTracks.forEach(t => trackMap.set(t.id, t))
+    return Array.from(trackMap.values())
+  }, [customTracks])
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
@@ -82,10 +101,8 @@ export default function App() {
           initialTrack={editingTrack}
           keyConfig={keyConfig}
           onSave={handleSaveTrack}
-          onBack={() => {
-            setEditingTrack(null)
-            setScreen('select')
-          }}
+          onChange={handleEditorChange}
+          onBack={handleBackToSelect}
           onPlay={handlePlayFromEditor}
         />
       )}
@@ -95,7 +112,7 @@ export default function App() {
           keyConfig={keyConfig}
           onEnd={handleGameEnd}
           onQuit={() => {
-            if (editingTrack) {
+            if (isEditingMode) {
               setScreen('editor')
             } else {
               handleBackToSelect()
@@ -109,7 +126,7 @@ export default function App() {
           track={selectedTrack}
           onRetry={() => setScreen('game')}
           onBack={() => {
-            if (editingTrack) {
+            if (isEditingMode) {
               setScreen('editor')
             } else {
               handleBackToSelect()

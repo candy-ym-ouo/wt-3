@@ -41,7 +41,7 @@ const DEFAULT_TRACK = {
   totalNotes: 0
 }
 
-export default function Editor({ initialTrack, onSave, onBack, onPlay, keyConfig }) {
+export default function Editor({ initialTrack, onSave, onBack, onPlay, onChange, keyConfig }) {
   const [track, setTrack] = useState(initialTrack || { ...DEFAULT_TRACK, notes: [] })
   const [notes, setNotes] = useState((initialTrack?.notes || []).map((n, i) => ({ ...n, id: i })))
   const [snapValue, setSnapValue] = useState(0.25)
@@ -574,6 +574,17 @@ export default function Editor({ initialTrack, onSave, onBack, onPlay, keyConfig
       setSelectedNoteId(null)
     }
   }
+
+  useEffect(() => {
+    if (onChange) {
+      const currentTrack = {
+        ...track,
+        notes: notes.map((n, i) => ({ ...n, id: i })),
+        totalNotes: notes.length
+      }
+      onChange(currentTrack)
+    }
+  }, [track, notes, onChange])
 
   useEffect(() => {
     return () => {
