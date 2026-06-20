@@ -21,6 +21,7 @@ import { useCalibrationStore } from './store/useCalibrationStore.js'
 import { useThemeStore } from './store/useThemeStore.js'
 import { useDailyChallengeStore } from './store/useDailyChallengeStore.js'
 import { useStoryStore } from './store/useStoryStore.js'
+import { useKeyPresetStore } from './store/useKeyPresetStore.js'
 import { getConstraintModifiers } from './data/dailyChallengeData.js'
 import { getChapterById, getStagesByChapter, getStageById } from './data/storyData.js'
 import CalibrationCenter from './components/CalibrationCenter.jsx'
@@ -30,7 +31,6 @@ export default function App() {
   const [screen, setScreen] = useState('select')
   const [selectedTrack, setSelectedTrack] = useState(null)
   const [editingTrack, setEditingTrack] = useState(null)
-  const [keyConfig, setKeyConfig] = useState(defaultKeyConfig)
   const [gameResult, setGameResult] = useState(null)
   const [customTracks, setCustomTracks] = useState([])
   const [isEditingMode, setIsEditingMode] = useState(false)
@@ -59,11 +59,12 @@ export default function App() {
   const storyStore = useStoryStore()
   const themeStore = useThemeStore()
   const dailyChallengeStore = useDailyChallengeStore()
+  const keyPresetStore = useKeyPresetStore()
 
   const themedKeyConfig = useMemo(() => ({
-    ...keyConfig,
+    ...keyPresetStore.currentPreset,
     colors: themeStore.getLaneColors()
-  }), [keyConfig, themeStore.theme.laneSchemeId])
+  }), [keyPresetStore.currentPreset, themeStore.theme.laneSchemeId])
 
   const playerStore = usePlayerStore()
   const {
@@ -372,8 +373,7 @@ export default function App() {
       {screen === 'settings' && (
         <KeySettings
           keyConfig={themedKeyConfig}
-          onSave={(config) => {
-            setKeyConfig(config)
+          onSave={() => {
             setScreen('select')
           }}
           onCancel={() => setScreen('select')}
