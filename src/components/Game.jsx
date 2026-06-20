@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import * as Tone from 'tone'
 import CanvasRenderer from './CanvasRenderer.jsx'
 import ScorePanel from './ScorePanel.jsx'
+import PauseMenu from './PauseMenu.jsx'
 import { usePracticeStore } from '../store/usePracticeStore.js'
 import { useCalibrationStore } from '../store/useCalibrationStore.js'
 
@@ -860,21 +861,38 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       return
     }
 
-    if (gameState !== 'playing') return
+    if (e.code === 'Escape') {
+      e.preventDefault()
+      if (gameState === 'playing') {
+        try {
+          Tone.Transport.pause()
+          setGameState('paused')
+        } catch(e) {}
+      } else if (gameState === 'paused') {
+        if (confirm('确定要退出吗？当前进度将丢失。')) {
+          onQuit()
+        }
+      }
+      return
+    }
 
     if (e.code === 'Space') {
       e.preventDefault()
-      try {
-        if (Tone.Transport.state === 'started') {
+      if (gameState === 'playing') {
+        try {
           Tone.Transport.pause()
           setGameState('paused')
-        } else if (Tone.Transport.state === 'paused') {
+        } catch(e) {}
+      } else if (gameState === 'paused') {
+        try {
           Tone.Transport.start()
           setGameState('playing')
-        }
-      } catch(e) {}
+        } catch(e) {}
+      }
       return
     }
+
+    if (gameState !== 'playing') return
 
     const laneIndex = keyConfig.lanes.indexOf(e.code)
     if (laneIndex === -1) return
@@ -902,7 +920,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       setJudgeFeedback({ type: judgeType, lane: laneIndex, id: Date.now() })
       setTimeout(() => setJudgeFeedback(null), 400)
     }
-  }, [gameState, keyConfig.lanes, judgeNote, startGame])
+  }, [gameState, keyConfig.lanes, judgeNote, startGame, onQuit])
 
   const handleKeyUp = useCallback((e) => {
     const laneIndex = keyConfig.lanes.indexOf(e.code)
@@ -1226,20 +1244,27 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       )}
 
       {gameState === 'paused' && (
-        <div style={styles.pauseOverlay}>
-          <div style={styles.pauseCard}>
-            <h2 style={styles.pauseTitle}>⏸ 暂停</h2>
-            <p style={styles.pauseHint}>按空格键继续</p>
-            <button style={styles.resumeBtn} onClick={() => {
-              try {
-                Tone.Transport.start()
-                setGameState('playing')
-              } catch(e) {}
-            }}>
-              ▶ 继续
-            </button>
-          </div>
-        </div>
+        <PauseMenu
+          score={score}
+          combo={combo}
+          maxCombo={maxCombo}
+          health={health}
+          stats={stats}
+          keyConfig={keyConfig}
+          track={track}
+          currentTime={currentTime}
+          duration={range.end - range.start}
+          onResume={() => {
+            try {
+              Tone.Transport.start()
+              setGameState('playing')
+            } catch(e) {}
+          }}
+          onRestart={() => {
+            startGame()
+          }}
+          onQuit={onQuit}
+        />
       )}
 
       {gameState === 'ready' && (
@@ -1558,46 +1583,7 @@ const styles = {
     cursor: 'pointer',
     marginTop: '10px'
   },
-  pauseOverlay: {
-    position: 'absolute',
-    inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'rgba(5,5,8,0.85)',
-    zIndex: 55,
-    backdropFilter: 'blur(10px)'
-  },
-  pauseCard: {
-    textAlign: 'center',
-    padding: '40px 60px',
-    background: 'rgba(10,10,20,0.9)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '16px'
-  },
-  pauseTitle: {
-    fontSize: '32px',
-    fontWeight: 800,
-    letterSpacing: '4px',
-    margin: '0 0 12px 0',
-    color: '#fff'
-  },
-  pauseHint: {
-    fontSize: '13px',
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: '24px'
-  },
-  resumeBtn: {
-    padding: '12px 40px',
-    background: 'linear-gradient(135deg, #00ffcc, #00ccaa)',
-    border: 'none',
-    borderRadius: '10px',
-    color: '#00332a',
-    fontSize: '14px',
-    fontWeight: 700,
-    letterSpacing: '2px',
-    cursor: 'pointer'
-  },
+
   tutorialIndicator: {
     position: 'absolute',
     top: '20px',
