@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { RANK_COLORS, TIER_GRADES, TIER_COLORS, TIER_NAMES, getTierInfo } from '../data/growthData.js'
 import {
   DIFFICULTIES,
@@ -69,6 +69,10 @@ export default function Result({
   const [activeDiffTab, setActiveDiffTab] = useState(normalizeDifficultyId(track.difficulty))
   const canvasRef = useRef(null)
   const animRef = useRef(null)
+  
+  const [isCountdown, setIsCountdown] = useState(false)
+  const [countdownValue, setCountdownValue] = useState(3)
+  const countdownTimerRef = useRef(null)
   
   const [replayAnalysis, setReplayAnalysis] = useState(null)
   const [selectedReplayId, setSelectedReplayId] = useState(null)
@@ -148,6 +152,64 @@ export default function Result({
     }
     animate()
   }
+
+  const startCountdown = useCallback(() => {
+    if (isCountdown) return
+    setIsCountdown(true)
+    setCountdownValue(3)
+    let count = 3
+    countdownTimerRef.current = setInterval(() => {
+      count -= 1
+      if (count <= 0) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+        setIsCountdown(false)
+        onRetry()
+      } else {
+        setCountdownValue(count)
+      }
+    }, 800)
+  }, [isCountdown, onRetry])
+
+  const cancelCountdown = useCallback(() => {
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+    }
+    setIsCountdown(false)
+    setCountdownValue(3)
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault()
+        if (isCountdown) {
+          cancelCountdown()
+        } else {
+          startCountdown()
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (isCountdown) {
+          cancelCountdown()
+        } else {
+          onBack()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isCountdown, startCountdown, cancelCountdown, onBack])
+
+  useEffect(() => {
+    return () => {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -286,6 +348,47 @@ export default function Result({
       <div style={styles.bgCanvas}>
         <canvas ref={canvasRef} style={styles.canvas} />
       </div>
+
+      {isCountdown && (
+        <div style={styles.countdownOverlay} onClick={cancelCountdown}>
+          <div style={styles.countdownInner}>
+            <div style={styles.countdownLabel}>准备重试 · 保留上局配置</div>
+            <div style={{
+              ...styles.countdownTrackInfo,
+              color: currentDiffInfo?.color || '#fff'
+            }}>
+              {track.title} · {currentDiffInfo?.name || track.difficulty} Lv.{track.level}
+            </div>
+            <div style={{
+              ...styles.countdownNumber,
+              color: countdownValue === 1 ? '#ff3366' : countdownValue === 2 ? '#ffcc00' : '#00ffcc',
+              textShadow: `0 0 60px ${countdownValue === 1 ? '#ff3366' : countdownValue === 2 ? '#ffcc00' : '#00ffcc'}88`
+            }}>
+              {countdownValue}
+            </div>
+            <div style={styles.countdownProgressWrap}>
+              <div style={{
+                ...styles.countdownProgressFill,
+                width: `${((3 - countdownValue + 1) / 3) * 100}%`,
+                background: countdownValue === 1
+                  ? 'linear-gradient(90deg, #ff3366, #ff6699)'
+                  : countdownValue === 2
+                  ? 'linear-gradient(90deg, #ffcc00, #ffee88)'
+                  : 'linear-gradient(90deg, #00ffcc, #66ffee)'
+              }} />
+            </div>
+            <div style={styles.countdownConfigRow}>
+              <QuickStatMini label="上局分数" value={result.score.toLocaleString()} color="#ffcc00" />
+              <QuickStatMini label="准确率" value={`${result.accuracy.toFixed(2)}%`} color="#00ffcc" />
+              <QuickStatMini label="最大连击" value={result.maxCombo} color="#ff3366" />
+              <QuickStatMini label="MISS" value={result.stats.miss} color={result.stats.miss === 0 ? '#00ffcc' : '#ff3366'} />
+            </div>
+            <div style={styles.countdownCancelHint}>
+              按 R / ESC / 点击任意处取消
+            </div>
+          </div>
+        </div>
+      )}
 
       {showTutorialComplete && isTutorialGame && (
         <div style={styles.tutorialCompleteOverlay}>
@@ -1064,17 +1167,95 @@ export default function Result({
           </div>
         )}
 
+        <div style={{
+          ...styles.quickRefSection,
+          opacity: showDetails ? 1 : 0,
+          transform: showDetails ? 'translateY(0)' : 'translateY(20px)'
+        }}>
+          <div style={styles.quickRefHeader}>
+            <span style={styles.quickRefIcon}>📋</span>
+            <span style={styles.quickRefTitle}>上局关键指标 · 快速参考</span>
+            {!result.cleared && (
+              <span style={styles.quickRefBadgeFailed}>⚠ 未通关</span>
+            )}
+            {result.cleared && hasNewRecord && (
+              <span style={styles.quickRefBadgeNew}>🏆 新纪录</span>
+            )}
+          </div>
+          <div style={styles.quickRefGrid}>
+            <QuickStatCard
+              icon="🎯"
+              label="分数"
+              value={result.score.toLocaleString()}
+              sub={bestRecord ? `最佳: ${bestRecord.score.toLocaleString()}` : '无历史'}
+              color="#ffcc00"
+              highlight={recordChecks?.isNewBest}
+            />
+            <QuickStatCard
+              icon="✨"
+              label="准确率"
+              value={`${result.accuracy.toFixed(2)}%`}
+              sub={hitRate >= 95 ? '几乎满分！' : hitRate >= 85 ? '表现良好' : hitRate >= 70 ? '还有提升空间' : '多加练习'}
+              color={result.accuracy >= 95 ? '#00ffcc' : result.accuracy >= 85 ? '#ffcc00' : '#ff3366'}
+              highlight={recordChecks?.isNewAccuracy}
+            />
+            <QuickStatCard
+              icon="🔥"
+              label="最大连击"
+              value={result.maxCombo}
+              sub={result.maxCombo >= totalNotes * 0.9 ? '接近FC！' : `最高: ${bestRecord?.maxCombo || 0}`}
+              color={result.maxCombo === totalNotes ? '#00ffcc' : '#ff3366'}
+              highlight={recordChecks?.isNewCombo}
+            />
+            <QuickStatCard
+              icon="💔"
+              label="失误次数"
+              value={result.stats.miss}
+              sub={result.stats.miss === 0 ? '完美无缺！' : result.stats.miss <= 5 ? '很少的失误' : `${result.stats.miss} 次MISS`}
+              color={result.stats.miss === 0 ? '#00ffcc' : result.stats.miss <= 5 ? '#ffcc00' : '#ff3366'}
+              highlight={result.stats.miss === 0}
+            />
+          </div>
+          <div style={styles.quickRefFooter}>
+            <div style={styles.quickRefInsight}>
+              <span style={styles.insightIcon}>💡</span>
+              <span style={styles.insightText}>
+                {result.stats.miss > 0 && result.accuracy < 90
+                  ? `建议：本局有 ${result.stats.miss} 次MISS，准确率 ${result.accuracy.toFixed(1)}%，可使用练习实验室针对性强化薄弱段落`
+                  : result.cleared
+                  ? '表现不错！试试挑战更高难度或追求满连吧'
+                  : '生命值不足，注意躲避密集段并保持连击恢复血量'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div style={styles.actions}>
-          <button style={styles.backBtn} onClick={onBack}>
+          <button
+            style={styles.backBtn}
+            onClick={onBack}
+          >
             ← 返回选曲
           </button>
-          <button style={styles.retryBtn} onClick={onRetry}>
-            ↻ 再来一次
+          <button
+            style={{
+              ...styles.retryBtn,
+              transform: isCountdown ? 'scale(0.95)' : 'scale(1)',
+              boxShadow: isCountdown
+                ? '0 0 40px rgba(0,255,204,0.4)'
+                : '0 6px 30px rgba(255,51,102,0.35)',
+              background: isCountdown
+                ? 'linear-gradient(135deg, #00ffcc 0%, #00ccaa 100%)'
+                : 'linear-gradient(135deg, #ff3366 0%, #cc2255 100%)'
+            }}
+            onClick={startCountdown}
+          >
+            {isCountdown ? `⏳ ${countdownValue}s 后开始...` : '↻ 一键重试'}
           </button>
         </div>
 
         <div style={styles.tipText}>
-          按 R 重试 · 按 ESC 返回
+          按 R 重试(带倒计时) · 按 ESC 返回 · 倒计时中按 R/ESC 取消
         </div>
       </div>
     </div>
@@ -1584,6 +1765,47 @@ function CompareItem({ label, currentValue, bestValue, format, isHigherBetter, i
   )
 }
 
+function QuickStatCard({ icon, label, value, sub, color, highlight = false }) {
+  return (
+    <div style={{
+      ...quickRefStyles.card,
+      borderColor: highlight ? `${color}55` : 'rgba(255,255,255,0.06)',
+      background: highlight
+        ? `linear-gradient(135deg, ${color}15, transparent)`
+        : 'rgba(255,255,255,0.02)',
+      boxShadow: highlight ? `0 0 20px ${color}22` : 'none'
+    }}>
+      <div style={quickRefStyles.cardHeader}>
+        <span style={quickRefStyles.cardIcon}>{icon}</span>
+        <span style={{ ...quickRefStyles.cardLabel, color }}>{label}</span>
+        {highlight && (
+          <span style={{
+            ...quickRefStyles.highlightBadge,
+            background: `${color}22`,
+            color,
+            borderColor: `${color}44`
+          }}>
+            NEW
+          </span>
+        )}
+      </div>
+      <div style={{ ...quickRefStyles.cardValue, color }}>
+        {value}
+      </div>
+      <div style={quickRefStyles.cardSub}>{sub}</div>
+    </div>
+  )
+}
+
+function QuickStatMini({ label, value, color }) {
+  return (
+    <div style={quickRefStyles.miniCard}>
+      <span style={quickRefStyles.miniLabel}>{label}</span>
+      <span style={{ ...quickRefStyles.miniValue, color }}>{value}</span>
+    </div>
+  )
+}
+
 const tierStyles = {
   container: {
     background: 'rgba(255,255,255,0.03)',
@@ -1856,6 +2078,71 @@ const compareStyles = {
   },
   diffText: {
     fontSize: '11px',
+    fontWeight: 700,
+    fontFamily: 'monospace'
+  }
+}
+
+const quickRefStyles = {
+  card: {
+    padding: '14px 12px',
+    borderRadius: '12px',
+    border: '1px solid',
+    transition: 'all 0.3s'
+  },
+  cardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '8px'
+  },
+  cardIcon: {
+    fontSize: '14px'
+  },
+  cardLabel: {
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1.5px'
+  },
+  highlightBadge: {
+    marginLeft: 'auto',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontSize: '9px',
+    fontWeight: 800,
+    letterSpacing: '1px',
+    border: '1px solid'
+  },
+  cardValue: {
+    fontSize: '22px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    marginBottom: '4px',
+    letterSpacing: '0.5px'
+  },
+  cardSub: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '0.5px'
+  },
+  miniCard: {
+    padding: '8px 12px',
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: '80px'
+  },
+  miniLabel: {
+    fontSize: '9px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px',
+    fontWeight: 600
+  },
+  miniValue: {
+    fontSize: '14px',
     fontWeight: 700,
     fontFamily: 'monospace'
   }
@@ -2562,6 +2849,151 @@ const styles = {
     fontSize: '11px',
     color: 'rgba(255,255,255,0.3)',
     letterSpacing: '2px'
+  },
+  countdownOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.85)',
+    backdropFilter: 'blur(20px)',
+    zIndex: 200,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    animation: 'fadeIn 0.3s ease-out',
+    cursor: 'pointer'
+  },
+  countdownInner: {
+    textAlign: 'center',
+    padding: '48px 56px',
+    background: 'linear-gradient(135deg, rgba(15,15,30,0.95), rgba(10,10,20,0.9))',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '28px',
+    boxShadow: '0 30px 120px rgba(0,0,0,0.5), inset 0 0 60px rgba(255,255,255,0.02)',
+    animation: 'scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+  },
+  countdownLabel: {
+    fontSize: '13px',
+    fontWeight: 700,
+    letterSpacing: '4px',
+    color: 'rgba(0,255,204,0.8)',
+    marginBottom: '8px',
+    textTransform: 'uppercase'
+  },
+  countdownTrackInfo: {
+    fontSize: '14px',
+    fontWeight: 600,
+    marginBottom: '32px',
+    letterSpacing: '1px',
+    opacity: 0.9
+  },
+  countdownNumber: {
+    fontSize: '140px',
+    fontWeight: 900,
+    lineHeight: 1,
+    marginBottom: '24px',
+    fontFamily: 'monospace',
+    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+    animation: 'countdownPulse 0.8s ease-out'
+  },
+  countdownProgressWrap: {
+    width: '320px',
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    marginBottom: '28px'
+  },
+  countdownProgressFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'all 0.3s ease-out'
+  },
+  countdownConfigRow: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '24px',
+    justifyContent: 'center'
+  },
+  countdownCancelHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.3)',
+    letterSpacing: '2px'
+  },
+  quickRefSection: {
+    marginBottom: '24px',
+    padding: '20px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.03), rgba(0,255,204,0.02))',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '16px',
+    transition: 'all 0.5s ease-out'
+  },
+  quickRefHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '16px',
+    flexWrap: 'wrap'
+  },
+  quickRefIcon: {
+    fontSize: '18px'
+  },
+  quickRefTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: '2px'
+  },
+  quickRefBadgeFailed: {
+    marginLeft: 'auto',
+    padding: '4px 12px',
+    background: 'rgba(255,51,102,0.15)',
+    border: '1px solid rgba(255,51,102,0.3)',
+    color: '#ff3366',
+    borderRadius: '20px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px'
+  },
+  quickRefBadgeNew: {
+    marginLeft: 'auto',
+    padding: '4px 12px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.25), rgba(255,153,0,0.15))',
+    border: '1px solid rgba(255,204,0,0.4)',
+    color: '#ffcc00',
+    borderRadius: '20px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px'
+  },
+  quickRefGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '10px',
+    marginBottom: '16px'
+  },
+  quickRefFooter: {
+    paddingTop: '12px',
+    borderTop: '1px solid rgba(255,255,255,0.05)'
+  },
+  quickRefInsight: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    padding: '10px 14px',
+    background: 'rgba(102,153,255,0.06)',
+    borderRadius: '10px',
+    border: '1px solid rgba(102,153,255,0.1)'
+  },
+  insightIcon: {
+    fontSize: '14px',
+    flexShrink: 0,
+    marginTop: '1px'
+  },
+  insightText: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 1.5,
+    letterSpacing: '0.3px'
   },
   tutorialCompleteOverlay: {
     position: 'fixed',
