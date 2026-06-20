@@ -1081,6 +1081,107 @@ export function usePlayerStore() {
       }
     })
 
+    const hitTimeDistribution = (() => {
+      const bucketSize = 50
+      const buckets = {}
+      judgeEvs.forEach(j => {
+        if (j.judgeType === 'miss') return
+        if (j.timeDiff === undefined || j.timeDiff === null) return
+        const diffMs = Math.round(j.timeDiff * 1000)
+        const bucket = Math.round(diffMs / bucketSize) * bucketSize
+        if (!buckets[bucket]) {
+          buckets[bucket] = { offset: bucket, count: 0, perfect: 0, great: 0, good: 0 }
+        }
+        buckets[bucket].count++
+        if (j.judgeType === 'perfect') buckets[bucket].perfect++
+        else if (j.judgeType === 'great') buckets[bucket].great++
+        else buckets[bucket].good++
+      })
+      return Object.values(buckets).sort((a, b) => a.offset - b.offset)
+    })()
+
+    const mistakePeaks = (() => {
+      const windowSize = 3
+      const stepSize = 1
+      const peaks = []
+      for (let t = 0; t < duration - windowSize; t += stepSize) {
+        const windowJudges = judgeEvs.filter(j => j.time >= t && j.time < t + windowSize)
+        const missCount = windowJudges.filter(j => j.judgeType === 'miss').length
+        const goodCount = windowJudges.filter(j => j.judgeType === 'good').length
+        const errorCount = missCount + goodCount
+        if (errorCount >= 2) {
+          const totalInWindow = windowJudges.length
+          const errorRate = totalInWindow > 0 ? (errorCount / totalInWindow) * 100 : 0
+          peaks.push({
+            startTime: t,
+            endTime: t + windowSize,
+            missCount,
+            goodCount,
+            errorCount,
+            totalInWindow,
+            errorRate: Math.round(errorRate * 10) / 10,
+            lanes: [...new Set(windowJudges.filter(j => j.judgeType === 'miss' || j.judgeType === 'good').map(j => j.lane))],
+            scoreLost: windowJudges
+              .filter(j => j.judgeType === 'miss' || j.judgeType === 'good')
+              .reduce((sum, j) => sum + (j.scoreChange || 0), 0)
+          })
+        }
+      }
+      const merged = []
+      let current = null
+      peaks.sort((a, b) => a.startTime - b.startTime).forEach(p => {
+        if (current && p.startTime <= current.endTime + 1) {
+          current.endTime = Math.max(current.endTime, p.endTime)
+          current.missCount += p.missCount
+          current.goodCount += p.goodCount
+          current.errorCount += p.errorCount
+          current.totalInWindow += p.totalInWindow
+          current.scoreLost += p.scoreLost
+          current.lanes = [...new Set([...current.lanes, ...p.lanes])]
+          current.errorRate = Math.round((current.errorCount / current.totalInWindow) * 1000) / 10
+        } else {
+          current = { ...p }
+          merged.push(current)
+        }
+      })
+      return merged.sort((a, b) => b.errorCount - a.errorCount).slice(0, 10)
+    })()
+
+    const keyLossPhases = (() => {
+      const phaseDuration = 10
+      const phaseCount = Math.max(1, Math.ceil(duration / phaseDuration))
+      const phases = []
+      for (let i = 0; i < phaseCount; i++) {
+        const startTime = i * phaseDuration
+        const endTime = Math.min((i + 1) * phaseDuration, duration)
+        const phaseJudges = judgeEvs.filter(j => j.time >= startTime && j.time < endTime)
+        const missCount = phaseJudges.filter(j => j.judgeType === 'miss').length
+        const goodCount = phaseJudges.filter(j => j.judgeType === 'good').length
+        const greatCount = phaseJudges.filter(j => j.judgeType === 'great').length
+        const perfectCount = phaseJudges.filter(j => j.judgeType === 'perfect').length
+        const total = phaseJudges.length
+        const potentialScore = total * 100
+        const actualScore = perfectCount * 100 + greatCount * 75 + goodCount * 50
+        const scoreLost = potentialScore - actualScore
+        const comboBreaksInPhase = comboBreaks.filter(cb => cb.time >= startTime && cb.time < endTime)
+        const maxComboLost = comboBreaksInPhase.reduce((sum, cb) => sum + cb.comboBefore, 0)
+        phases.push({
+          startTime,
+          endTime,
+          total,
+          perfect: perfectCount,
+          great: greatCount,
+          good: goodCount,
+          miss: missCount,
+          scoreLost: Math.round(scoreLost),
+          comboBreaksCount: comboBreaksInPhase.length,
+          maxComboLost,
+          severity: scoreLost > 500 ? 'critical' : scoreLost > 200 ? 'warning' : 'normal'
+        })
+      }
+      return phases
+    })()
+
     return {
       laneStats,
       earlyLate: { early, late, perfectTiming, averageDiff },
@@ -1089,7 +1190,10 @@ export function usePlayerStore() {
       totalJudges: judgeEvs.length,
       totalKeys: keyEvs.length,
       scoreSnapshots: scoreHistory || [],
-      healthSnapshots: healthHistory || []
+      healthSnapshots: healthHistory || [],
+      hitTimeDistribution,
+      mistakePeaks,
+      keyLossPhases
     }
   }, [replays])
 

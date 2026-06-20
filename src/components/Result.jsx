@@ -2519,6 +2519,256 @@ const styles = {
     fontSize: '16px',
     color: 'rgba(255,255,255,0.3)'
   },
+  hitDistContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  hitDistCanvas: {
+    width: '100%',
+    height: '220px',
+    borderRadius: '10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.06)'
+  },
+  hitDistLegend: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '16px',
+    flexWrap: 'wrap'
+  },
+  hitDistLegendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  hitDistLegendDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    display: 'inline-block'
+  },
+  hitDistSummary: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '20px',
+    padding: '10px 0'
+  },
+  hitDistSummaryItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px'
+  },
+  hitDistSummaryLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)'
+  },
+  hitDistSummaryValue: {
+    fontSize: '14px',
+    fontWeight: 800,
+    fontFamily: 'monospace'
+  },
+  hitDistHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    padding: '4px 0'
+  },
+  mistakePeaksContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  mistakePeaksHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0 4px',
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  mistakePeaksHint: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.3)'
+  },
+  mistakePeaksList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '300px',
+    overflowY: 'auto'
+  },
+  mistakePeakCard: {
+    padding: '12px 14px',
+    background: 'rgba(255,51,102,0.04)',
+    border: '1px solid rgba(255,51,102,0.12)',
+    borderRadius: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  },
+  mistakePeakHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  mistakePeakRank: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  mistakePeakRankNum: {
+    fontSize: '14px',
+    fontWeight: 900,
+    fontFamily: 'monospace'
+  },
+  mistakePeakTime: {
+    fontSize: '11px',
+    fontFamily: 'monospace',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  mistakePeakErrorRate: {
+    fontSize: '12px',
+    fontWeight: 700
+  },
+  mistakePeakBarContainer: {
+    padding: '0 2px'
+  },
+  mistakePeakBarBg: {
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  mistakePeakBarFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.5s ease'
+  },
+  mistakePeakStats: {
+    display: 'flex',
+    gap: '12px',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.6)'
+  },
+  mistakePeakStat: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px'
+  },
+  mistakePeakStatDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    display: 'inline-block'
+  },
+  mistakePeakMeta: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)'
+  },
+  mistakePeakLane: {
+    fontFamily: 'monospace'
+  },
+  mistakePeakScoreLost: {
+    color: '#ff3366',
+    fontWeight: 600,
+    fontFamily: 'monospace'
+  },
+  keyLossContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  keyLossCanvas: {
+    width: '100%',
+    height: '200px',
+    borderRadius: '10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.06)'
+  },
+  keyLossLegend: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '16px',
+    flexWrap: 'wrap'
+  },
+  keyLossLegendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  keyLossLegendDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    display: 'inline-block'
+  },
+  keyLossPhaseList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '200px',
+    overflowY: 'auto'
+  },
+  keyLossPhaseCard: {
+    padding: '10px 14px',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderLeft: '3px solid',
+    borderRadius: '8px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  keyLossPhaseHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  keyLossPhaseTime: {
+    fontSize: '12px',
+    fontFamily: 'monospace',
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: 600
+  },
+  keyLossPhaseBadge: {
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px'
+  },
+  keyLossPhaseDetail: {
+    display: 'flex',
+    gap: '12px',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  keyLossPhaseBar: {
+    display: 'flex',
+    height: '4px',
+    borderRadius: '2px',
+    overflow: 'hidden',
+    background: 'rgba(255,255,255,0.05)'
+  },
+  keyLossPhaseBarSeg: {
+    height: '100%',
+    transition: 'width 0.3s ease'
+  },
+  keyLossHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    padding: '4px 0'
+  },
   emptyHint: {
     fontSize: '11px',
     color: 'rgba(255,255,255,0.3)',
@@ -2880,6 +3130,10 @@ function ReplayAnalysis({
   track
 }) {
   const [replayTab, setReplayTab] = useState('timeline')
+  const hitDistCanvasRef = useRef(null)
+  const hitDistAnimRef = useRef(null)
+  const keyLossCanvasRef = useRef(null)
+  const keyLossAnimRef = useRef(null)
 
   useEffect(() => {
     if (!replayData || !replayAnalysis || replayTab !== 'timeline') return
@@ -3002,6 +3256,240 @@ function ReplayAnalysis({
     }
   }, [replayData, replayAnalysis, replayTab, timelineCursor, showTimelineDetail, track, replayCanvasRef, replayAnimRef])
 
+  useEffect(() => {
+    if (!replayAnalysis || replayTab !== 'hitDistribution') return
+    const canvas = hitDistCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+    const w = rect.width
+    const h = rect.height
+    const dist = replayAnalysis.hitTimeDistribution
+    if (!dist || dist.length === 0) return
+
+    let animProgress = 0
+    const draw = () => {
+      animProgress = Math.min(animProgress + 0.04, 1)
+      const ease = 1 - Math.pow(1 - animProgress, 3)
+      ctx.clearRect(0, 0, w, h)
+
+      const padding = { top: 30, right: 20, bottom: 50, left: 60 }
+      const chartW = w - padding.left - padding.right
+      const chartH = h - padding.top - padding.bottom
+
+      const maxCount = Math.max(...dist.map(b => b.count), 1)
+      const minOffset = dist[0].offset
+      const maxOffset = dist[dist.length - 1].offset
+      const range = maxOffset - minOffset || 100
+      const barWidth = Math.max(4, (chartW / dist.length) * 0.7)
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartH / 5) * i
+        ctx.beginPath()
+        ctx.moveTo(padding.left, y)
+        ctx.lineTo(padding.left + chartW, y)
+        ctx.stroke()
+        const val = Math.round(maxCount * (1 - i / 5))
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'
+        ctx.font = '9px monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(val, padding.left - 8, y + 3)
+      }
+
+      ctx.strokeStyle = 'rgba(255,204,0,0.3)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([4, 4])
+      const centerBucket = dist.find(b => b.offset === 0)
+      if (centerBucket || minOffset <= 0 && maxOffset >= 0) {
+        const zeroX = padding.left + ((0 - minOffset) / range) * chartW
+        ctx.beginPath()
+        ctx.moveTo(zeroX, padding.top)
+        ctx.lineTo(zeroX, padding.top + chartH)
+        ctx.stroke()
+      }
+      ctx.setLineDash([])
+
+      dist.forEach((bucket, i) => {
+        const x = padding.left + ((bucket.offset - minOffset) / range) * chartW
+        const barH = (bucket.count / maxCount) * chartH * ease
+        const y = padding.top + chartH - barH
+
+        const grad = ctx.createLinearGradient(x, y, x, padding.top + chartH)
+        if (bucket.offset < -100) {
+          grad.addColorStop(0, 'rgba(102,153,255,0.9)')
+          grad.addColorStop(1, 'rgba(102,153,255,0.3)')
+        } else if (bucket.offset > 100) {
+          grad.addColorStop(0, 'rgba(255,51,102,0.9)')
+          grad.addColorStop(1, 'rgba(255,51,102,0.3)')
+        } else {
+          grad.addColorStop(0, 'rgba(255,204,0,0.9)')
+          grad.addColorStop(1, 'rgba(0,255,204,0.5)')
+        }
+
+        ctx.fillStyle = grad
+        const bw = Math.max(3, barWidth)
+        ctx.fillRect(x - bw / 2, y, bw, barH)
+
+        const innerH = barH * ease
+        if (innerH > 4) {
+          const perfectH = (bucket.perfect / bucket.count) * innerH
+          const greatH = (bucket.great / bucket.count) * innerH
+          let curY = padding.top + chartH - innerH
+          if (perfectH > 0) {
+            ctx.fillStyle = 'rgba(255,204,0,0.6)'
+            ctx.fillRect(x - bw / 2, curY, bw, perfectH)
+            curY += perfectH
+          }
+          if (greatH > 0) {
+            ctx.fillStyle = 'rgba(0,255,204,0.6)'
+            ctx.fillRect(x - bw / 2, curY, bw, greatH)
+            curY += greatH
+          }
+          if (bucket.good > 0) {
+            const goodH = (bucket.good / bucket.count) * innerH
+            ctx.fillStyle = 'rgba(102,153,255,0.6)'
+            ctx.fillRect(x - bw / 2, curY, bw, goodH)
+          }
+        }
+      })
+
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'
+      ctx.font = '10px monospace'
+      ctx.textAlign = 'center'
+      const labelStep = Math.max(1, Math.floor(dist.length / 8))
+      dist.forEach((bucket, i) => {
+        if (i % labelStep === 0) {
+          const x = padding.left + ((bucket.offset - minOffset) / range) * chartW
+          ctx.fillText(`${bucket.offset}ms`, x, padding.top + chartH + 18)
+        }
+      })
+
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'
+      ctx.font = '9px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText('← 早按 (EARLY)', padding.left + chartW * 0.2, padding.top + chartH + 38)
+      ctx.fillText('晚按 (LATE) →', padding.left + chartW * 0.8, padding.top + chartH + 38)
+
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'
+      ctx.font = 'bold 11px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText('命中时间偏差分布', padding.left, padding.top - 12)
+
+      if (animProgress < 1) {
+        hitDistAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+    draw()
+    return () => { if (hitDistAnimRef.current) cancelAnimationFrame(hitDistAnimRef.current) }
+  }, [replayAnalysis, replayTab])
+
+  useEffect(() => {
+    if (!replayAnalysis || replayTab !== 'keyLoss') return
+    const canvas = keyLossCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * 2
+    canvas.height = rect.height * 2
+    ctx.scale(2, 2)
+    const w = rect.width
+    const h = rect.height
+    const phases = replayAnalysis.keyLossPhases
+    if (!phases || phases.length === 0) return
+
+    let animProgress = 0
+    const draw = () => {
+      animProgress = Math.min(animProgress + 0.04, 1)
+      const ease = 1 - Math.pow(1 - animProgress, 3)
+      ctx.clearRect(0, 0, w, h)
+
+      const padding = { top: 40, right: 20, bottom: 50, left: 60 }
+      const chartW = w - padding.left - padding.right
+      const chartH = h - padding.top - padding.bottom
+      const maxLost = Math.max(...phases.map(p => p.scoreLost), 1)
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= 5; i++) {
+        const y = padding.top + (chartH / 5) * i
+        ctx.beginPath()
+        ctx.moveTo(padding.left, y)
+        ctx.lineTo(padding.left + chartW, y)
+        ctx.stroke()
+        const val = Math.round(maxLost * (1 - i / 5))
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'
+        ctx.font = '9px monospace'
+        ctx.textAlign = 'right'
+        ctx.fillText(val, padding.left - 8, y + 3)
+      }
+
+      const barW = (chartW / phases.length) * 0.65
+      const gap = (chartW / phases.length) * 0.35
+
+      phases.forEach((phase, i) => {
+        const x = padding.left + (chartW / phases.length) * i + gap / 2
+        const barH = (phase.scoreLost / maxLost) * chartH * ease
+        const y = padding.top + chartH - barH
+
+        const severityColor = phase.severity === 'critical' ? '#ff3366' : phase.severity === 'warning' ? '#ffcc00' : '#00ffcc'
+        const grad = ctx.createLinearGradient(x, y, x, padding.top + chartH)
+        grad.addColorStop(0, severityColor + 'dd')
+        grad.addColorStop(1, severityColor + '33')
+        ctx.fillStyle = grad
+        ctx.fillRect(x, y, barW, barH)
+
+        if (phase.miss > 0) {
+          const missH = (phase.miss / (phase.total || 1)) * barH
+          ctx.fillStyle = 'rgba(255,51,102,0.7)'
+          ctx.fillRect(x, padding.top + chartH - missH, barW, missH)
+        }
+
+        if (phase.severity === 'critical' || phase.severity === 'warning') {
+          ctx.strokeStyle = severityColor + '88'
+          ctx.lineWidth = 1
+          ctx.strokeRect(x - 1, y - 1, barW + 2, barH + 2)
+        }
+
+        const timeLabel = `${Math.floor(phase.startTime / 60)}:${String(Math.floor(phase.startTime % 60)).padStart(2, '0')}`
+        ctx.fillStyle = 'rgba(255,255,255,0.5)'
+        ctx.font = '8px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText(timeLabel, x + barW / 2, padding.top + chartH + 14)
+
+        if (phase.scoreLost > 0 && barH > 12) {
+          ctx.fillStyle = 'rgba(255,255,255,0.7)'
+          ctx.font = 'bold 9px monospace'
+          ctx.textAlign = 'center'
+          ctx.fillText(`-${phase.scoreLost}`, x + barW / 2, y - 4)
+        }
+      })
+
+      ctx.fillStyle = 'rgba(255,255,255,0.6)'
+      ctx.font = 'bold 11px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText('关键失分阶段分析', padding.left, padding.top - 18)
+
+      ctx.font = '9px sans-serif'
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'
+      ctx.textAlign = 'center'
+      ctx.fillText('时间段', padding.left + chartW / 2, padding.top + chartH + 36)
+
+      ctx.textAlign = 'left'
+      ctx.fillText('失分量', padding.left - 45, padding.top - 4)
+
+      if (animProgress < 1) {
+        keyLossAnimRef.current = requestAnimationFrame(draw)
+      }
+    }
+    draw()
+    return () => { if (keyLossAnimRef.current) cancelAnimationFrame(keyLossAnimRef.current) }
+  }, [replayAnalysis, replayTab])
+
   const handleTimelineClick = (e) => {
     if (!replayData) return
     const canvas = replayCanvasRef.current
@@ -3105,7 +3593,10 @@ function ReplayAnalysis({
               { id: 'timeline', label: '🕐 判定时间线' },
               { id: 'lanes', label: '📊 轨道分析' },
               { id: 'timing', label: '⏱ 时机偏差' },
+              { id: 'hitDistribution', label: '🎯 命中分布' },
               { id: 'segments', label: '📈 分段表现' },
+              { id: 'mistakePeaks', label: '⚡ 失误波峰' },
+              { id: 'keyLoss', label: '🔥 失分阶段' },
               { id: 'breaks', label: '💔 连击中断' }
             ].map(tab => (
               <button
@@ -3256,6 +3747,71 @@ function ReplayAnalysis({
             </div>
           )}
 
+          {replayTab === 'hitDistribution' && (
+            <div style={styles.hitDistContainer}>
+              <canvas ref={hitDistCanvasRef} style={styles.hitDistCanvas} />
+              <div style={styles.hitDistLegend}>
+                <div style={styles.hitDistLegendItem}>
+                  <span style={{ ...styles.hitDistLegendDot, background: '#ffcc00' }}></span>
+                  <span>PERFECT</span>
+                </div>
+                <div style={styles.hitDistLegendItem}>
+                  <span style={{ ...styles.hitDistLegendDot, background: '#00ffcc' }}></span>
+                  <span>GREAT</span>
+                </div>
+                <div style={styles.hitDistLegendItem}>
+                  <span style={{ ...styles.hitDistLegendDot, background: '#6699ff' }}></span>
+                  <span>GOOD</span>
+                </div>
+                <div style={styles.hitDistLegendItem}>
+                  <span style={{ ...styles.hitDistLegendDot, background: 'rgba(255,204,0,0.3)', border: '1px dashed rgba(255,204,0,0.5)' }}></span>
+                  <span>零偏差线</span>
+                </div>
+              </div>
+              {replayAnalysis.hitTimeDistribution.length > 0 && (
+                <div style={styles.hitDistSummary}>
+                  <div style={styles.hitDistSummaryItem}>
+                    <span style={styles.hitDistSummaryLabel}>最集中偏差</span>
+                    <span style={{
+                      ...styles.hitDistSummaryValue,
+                      color: replayAnalysis.hitTimeDistribution.reduce((a, b) => a.count > b.count ? a : b).offset > 50 ? '#ff3366'
+                        : replayAnalysis.hitTimeDistribution.reduce((a, b) => a.count > b.count ? a : b).offset < -50 ? '#6699ff' : '#ffcc00'
+                    }}>
+                      {replayAnalysis.hitTimeDistribution.reduce((a, b) => a.count > b.count ? a : b).offset}ms
+                    </span>
+                  </div>
+                  <div style={styles.hitDistSummaryItem}>
+                    <span style={styles.hitDistSummaryLabel}>偏差范围</span>
+                    <span style={styles.hitDistSummaryValue}>
+                      {replayAnalysis.hitTimeDistribution[0].offset}ms ~ {replayAnalysis.hitTimeDistribution[replayAnalysis.hitTimeDistribution.length - 1].offset}ms
+                    </span>
+                  </div>
+                  <div style={styles.hitDistSummaryItem}>
+                    <span style={styles.hitDistSummaryLabel}>±50ms内占比</span>
+                    <span style={{
+                      ...styles.hitDistSummaryValue,
+                      color: (() => {
+                        const within = replayAnalysis.hitTimeDistribution.filter(b => Math.abs(b.offset) <= 50).reduce((s, b) => s + b.count, 0)
+                        const total = replayAnalysis.hitTimeDistribution.reduce((s, b) => s + b.count, 0)
+                        const pct = total > 0 ? (within / total) * 100 : 0
+                        return pct >= 70 ? '#ffcc00' : pct >= 40 ? '#00ffcc' : '#ff3366'
+                      })()
+                    }}>
+                      {(() => {
+                        const within = replayAnalysis.hitTimeDistribution.filter(b => Math.abs(b.offset) <= 50).reduce((s, b) => s + b.count, 0)
+                        const total = replayAnalysis.hitTimeDistribution.reduce((s, b) => s + b.count, 0)
+                        return total > 0 ? Math.round((within / total) * 1000) / 10 : 0
+                      })()}%
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div style={styles.hitDistHint}>
+                💡 分布越集中在零偏差线附近，说明时机掌握越精准
+              </div>
+            </div>
+          )}
+
           {replayTab === 'segments' && (
             <div style={styles.segmentAnalysis}>
               {replayAnalysis.timeSegments.map((seg, idx) => {
@@ -3294,6 +3850,157 @@ function ReplayAnalysis({
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {replayTab === 'mistakePeaks' && (
+            <div style={styles.mistakePeaksContainer}>
+              {replayAnalysis.mistakePeaks.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <div style={styles.emptyIcon}>🎯</div>
+                  <div style={styles.emptyText}>没有明显失误波峰</div>
+                  <div style={styles.emptyHint}>你的表现非常稳定！</div>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.mistakePeaksHeader}>
+                    <span>检测到 {replayAnalysis.mistakePeaks.length} 个失误密集区</span>
+                    <span style={styles.mistakePeaksHint}>按严重程度排列</span>
+                  </div>
+                  <div style={styles.mistakePeaksList}>
+                    {replayAnalysis.mistakePeaks.map((peak, idx) => (
+                      <div key={idx} style={styles.mistakePeakCard}>
+                        <div style={styles.mistakePeakHeader}>
+                          <div style={styles.mistakePeakRank}>
+                            <span style={{
+                              ...styles.mistakePeakRankNum,
+                              color: idx < 2 ? '#ff3366' : idx < 5 ? '#ffcc00' : '#00ffcc'
+                            }}>#{idx + 1}</span>
+                            <span style={styles.mistakePeakTime}>
+                              {Math.floor(peak.startTime / 60)}:{String(Math.floor(peak.startTime % 60)).padStart(2, '0')} - 
+                              {Math.floor(peak.endTime / 60)}:{String(Math.floor(peak.endTime % 60)).padStart(2, '0')}
+                            </span>
+                          </div>
+                          <div style={{
+                            ...styles.mistakePeakErrorRate,
+                            color: peak.errorRate >= 60 ? '#ff3366' : peak.errorRate >= 30 ? '#ffcc00' : '#00ffcc'
+                          }}>
+                            {peak.errorRate}% 失误率
+                          </div>
+                        </div>
+                        <div style={styles.mistakePeakBarContainer}>
+                          <div style={styles.mistakePeakBarBg}>
+                            <div style={{
+                              ...styles.mistakePeakBarFill,
+                              width: `${peak.errorRate}%`,
+                              background: peak.errorRate >= 60 ? 'linear-gradient(90deg, #ff3366, #ff6666)' : peak.errorRate >= 30 ? 'linear-gradient(90deg, #ffcc00, #ff9933)' : 'linear-gradient(90deg, #00ffcc, #00ccaa)'
+                            }}></div>
+                          </div>
+                        </div>
+                        <div style={styles.mistakePeakStats}>
+                          <div style={styles.mistakePeakStat}>
+                            <span style={{ ...styles.mistakePeakStatDot, background: '#ff3366' }}></span>
+                            <span>MISS: {peak.missCount}</span>
+                          </div>
+                          <div style={styles.mistakePeakStat}>
+                            <span style={{ ...styles.mistakePeakStatDot, background: '#6699ff' }}></span>
+                            <span>GOOD: {peak.goodCount}</span>
+                          </div>
+                          <div style={styles.mistakePeakStat}>
+                            <span style={{ ...styles.mistakePeakStatDot, background: 'rgba(255,255,255,0.3)' }}></span>
+                            <span>总音符: {peak.totalInWindow}</span>
+                          </div>
+                        </div>
+                        <div style={styles.mistakePeakMeta}>
+                          <span style={styles.mistakePeakLane}>
+                            涉及轨道: {peak.lanes.map(l => `L${l + 1}`).join(', ')}
+                          </span>
+                          {peak.scoreLost < 0 && (
+                            <span style={styles.mistakePeakScoreLost}>
+                              失分: {peak.scoreLost}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={styles.mistakePeaksHint}>
+                    💡 失误波峰代表短时间内连续出现失误的区域，优先攻克这些区段可快速提升成绩
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {replayTab === 'keyLoss' && (
+            <div style={styles.keyLossContainer}>
+              <canvas ref={keyLossCanvasRef} style={styles.keyLossCanvas} />
+              <div style={styles.keyLossLegend}>
+                <div style={styles.keyLossLegendItem}>
+                  <span style={{ ...styles.keyLossLegendDot, background: '#ff3366' }}></span>
+                  <span>严重失分</span>
+                </div>
+                <div style={styles.keyLossLegendItem}>
+                  <span style={{ ...styles.keyLossLegendDot, background: '#ffcc00' }}></span>
+                  <span>警告</span>
+                </div>
+                <div style={styles.keyLossLegendItem}>
+                  <span style={{ ...styles.keyLossLegendDot, background: '#00ffcc' }}></span>
+                  <span>正常</span>
+                </div>
+              </div>
+              <div style={styles.keyLossPhaseList}>
+                {replayAnalysis.keyLossPhases.filter(p => p.severity !== 'normal').length > 0 ? (
+                  replayAnalysis.keyLossPhases
+                    .filter(p => p.severity !== 'normal')
+                    .sort((a, b) => b.scoreLost - a.scoreLost)
+                    .map((phase, idx) => (
+                      <div key={idx} style={{
+                        ...styles.keyLossPhaseCard,
+                        borderLeftColor: phase.severity === 'critical' ? '#ff3366' : '#ffcc00'
+                      }}>
+                        <div style={styles.keyLossPhaseHeader}>
+                          <span style={styles.keyLossPhaseTime}>
+                            {Math.floor(phase.startTime / 60)}:{String(Math.floor(phase.startTime % 60)).padStart(2, '0')} - 
+                            {Math.floor(phase.endTime / 60)}:{String(Math.floor(phase.endTime % 60)).padStart(2, '0')}
+                          </span>
+                          <span style={{
+                            ...styles.keyLossPhaseBadge,
+                            background: phase.severity === 'critical' ? 'rgba(255,51,102,0.2)' : 'rgba(255,204,0,0.2)',
+                            color: phase.severity === 'critical' ? '#ff3366' : '#ffcc00'
+                          }}>
+                            {phase.severity === 'critical' ? '严重' : '警告'}
+                          </span>
+                        </div>
+                        <div style={styles.keyLossPhaseDetail}>
+                          <span>失分 <strong style={{ color: '#ff3366' }}>-{phase.scoreLost}</strong></span>
+                          <span>MISS {phase.miss}</span>
+                          <span>GOOD {phase.good}</span>
+                          {phase.comboBreaksCount > 0 && <span>断连 {phase.comboBreaksCount}次</span>}
+                        </div>
+                        <div style={styles.keyLossPhaseBar}>
+                          {phase.total > 0 && (
+                            <>
+                              <div style={{ ...styles.keyLossPhaseBarSeg, width: `${(phase.perfect / phase.total) * 100}%`, background: '#ffcc00' }}></div>
+                              <div style={{ ...styles.keyLossPhaseBarSeg, width: `${(phase.great / phase.total) * 100}%`, background: '#00ffcc' }}></div>
+                              <div style={{ ...styles.keyLossPhaseBarSeg, width: `${(phase.good / phase.total) * 100}%`, background: '#6699ff' }}></div>
+                              <div style={{ ...styles.keyLossPhaseBarSeg, width: `${(phase.miss / phase.total) * 100}%`, background: '#ff3366' }}></div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <div style={styles.emptyState}>
+                    <div style={styles.emptyIcon}>🌟</div>
+                    <div style={styles.emptyText}>没有关键失分阶段</div>
+                    <div style={styles.emptyHint}>整首曲目表现稳定！</div>
+                  </div>
+                )}
+              </div>
+              <div style={styles.keyLossHint}>
+                💡 柱状图展示每个10秒区段的失分量，红色标注的严重阶段是最需要针对性练习的部分
+              </div>
             </div>
           )}
 
