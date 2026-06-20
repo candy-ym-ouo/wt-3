@@ -39,6 +39,7 @@ export default function TrackSelect({
   const [bpmRange, setBpmRange] = useState({ min: 60, max: 240 })
   const [noteCountRange, setNoteCountRange] = useState({ min: 0, max: 1000 })
   const [clearStatus, setClearStatus] = useState('all')
+  const [overallClearStatus, setOverallClearStatus] = useState('all')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const canvasRef = useRef(null)
   const animRef = useRef(null)
@@ -46,57 +47,51 @@ export default function TrackSelect({
 
   const currentTitle = TITLES.find(t => t.id === playerData.currentTitle)
 
-  const getTrackClearStatus = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 'none'
-    const diffRecords = track.difficulties.map(d => {
-      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
-      return { difficulty: d, cleared: rec?.cleared || false }
+  const getDifficultyClearStatus = useCallback((track, difficulty) => {
+    if (!getBestRecord) return false
+    const rec = getBestRecord(track.id, difficulty.id)
+    return rec?.cleared || false
+  }, [getBestRecord])
+
+  const getDifficultyScore = useCallback((track, difficulty) => {
+    if (!getBestRecord) return 0
+    const rec = getBestRecord(track.id, difficulty.id)
+    return rec?.score || 0
+  }, [getBestRecord])
+
+  const getDifficultyAccuracy = useCallback((track, difficulty) => {
+    if (!getBestRecord) return 0
+    const rec = getBestRecord(track.id, difficulty.id)
+    return rec?.accuracy || 0
+  }, [getBestRecord])
+
+  const getMatchingDifficulty = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return null
+
+    const matchingDiffs = track.difficulties.filter(d => {
+      if (filterDifficulty !== 'all' && d.id !== filterDifficulty) return false
+      if (d.level < levelRange.min || d.level > levelRange.max) return false
+      const noteCount = d.totalNotes || 0
+      if (noteCount < noteCountRange.min || noteCount > noteCountRange.max) return false
+      if (clearStatus !== 'all') {
+        const cleared = getDifficultyClearStatus(track, d)
+        if (clearStatus === 'none' && cleared) return false
+        if (clearStatus === 'cleared' && !cleared) return false
+      }
+      return true
     })
-    const clearedCount = diffRecords.filter(r => r.cleared).length
+
+    if (matchingDiffs.length === 0) return null
+    return matchingDiffs.sort((a, b) => b.level - a.level)[0]
+  }, [filterDifficulty, levelRange, noteCountRange, clearStatus, getDifficultyClearStatus])
+
+  const getTrackOverallClearStatus = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 'none'
+    const clearedCount = track.difficulties.filter(d => getDifficultyClearStatus(track, d)).length
     if (clearedCount === 0) return 'none'
     if (clearedCount === track.difficulties.length) return 'all_cleared'
     return 'partial'
-  }, [getBestRecord])
-
-  const getTrackHighestLevel = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 0
-    return Math.max(...track.difficulties.map(d => d.level))
-  }, [])
-
-  const getTrackLowestLevel = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 20
-    return Math.min(...track.difficulties.map(d => d.level))
-  }, [])
-
-  const getTrackMaxNotes = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 0
-    return Math.max(...track.difficulties.map(d => d.totalNotes || 0))
-  }, [])
-
-  const getTrackMinNotes = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 9999
-    return Math.min(...track.difficulties.map(d => d.totalNotes || 0))
-  }, [])
-
-  const getTrackBestScore = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 0
-    let maxScore = 0
-    track.difficulties.forEach(d => {
-      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
-      if (rec?.score > maxScore) maxScore = rec.score
-    })
-    return maxScore
-  }, [getBestRecord])
-
-  const getTrackBestAccuracy = useCallback((track) => {
-    if (!track.difficulties || track.difficulties.length === 0) return 0
-    let maxAcc = 0
-    track.difficulties.forEach(d => {
-      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
-      if (rec?.accuracy > maxAcc) maxAcc = rec.accuracy
-    })
-    return maxAcc
-  }, [getBestRecord])
+  }, [getDifficultyClearStatus])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -166,35 +161,29 @@ export default function TrackSelect({
     }
   }, [keyConfig.colors])
 
+  const tracksWithMatchingDifficulty = useMemo(() => {
+    return [...tracks].map(track => {
+      const matchingDiff = getMatchingDifficulty(track)
+      return {
+        ...track,
+        matchingDifficulty: matchingDiff
+      }
+    })
+  }, [tracks, getMatchingDifficulty])
+
   const filteredTracks = useMemo(() => {
-    let result = [...tracks]
+    let result = [...tracksWithMatchingDifficulty]
 
     if (selectedPackId !== 'all') {
       result = result.filter(t => t.packIds?.includes(selectedPackId))
     }
 
-    if (filterDifficulty !== 'all') {
-      result = result.filter(t =>
-        t.difficulties?.some(d => d.id === filterDifficulty)
-      )
-    }
-
-    result = result.filter(t => {
-      const minLvl = getTrackLowestLevel(t)
-      const maxLvl = getTrackHighestLevel(t)
-      return maxLvl >= levelRange.min && minLvl <= levelRange.max
-    })
+    result = result.filter(t => t.matchingDifficulty !== null)
 
     result = result.filter(t => t.bpm >= bpmRange.min && t.bpm <= bpmRange.max)
 
-    result = result.filter(t => {
-      const minNotes = getTrackMinNotes(t)
-      const maxNotes = getTrackMaxNotes(t)
-      return maxNotes >= noteCountRange.min && minNotes <= noteCountRange.max
-    })
-
-    if (clearStatus !== 'all') {
-      result = result.filter(t => getTrackClearStatus(t) === clearStatus)
+    if (overallClearStatus !== 'all') {
+      result = result.filter(t => getTrackOverallClearStatus(t) === overallClearStatus)
     }
 
     if (searchQuery.trim()) {
@@ -216,10 +205,10 @@ export default function TrackSelect({
 
     switch (sortBy) {
       case 'level_asc':
-        result.sort((a, b) => getTrackLowestLevel(a) - getTrackLowestLevel(b))
+        result.sort((a, b) => (a.matchingDifficulty?.level || 0) - (b.matchingDifficulty?.level || 0))
         break
       case 'level_desc':
-        result.sort((a, b) => getTrackHighestLevel(b) - getTrackHighestLevel(a))
+        result.sort((a, b) => (b.matchingDifficulty?.level || 0) - (a.matchingDifficulty?.level || 0))
         break
       case 'title':
         result.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
@@ -234,24 +223,29 @@ export default function TrackSelect({
         result.sort((a, b) => b.bpm - a.bpm)
         break
       case 'notes_asc':
-        result.sort((a, b) => getTrackMinNotes(a) - getTrackMinNotes(b))
+        result.sort((a, b) => (a.matchingDifficulty?.totalNotes || 0) - (b.matchingDifficulty?.totalNotes || 0))
         break
       case 'notes_desc':
-        result.sort((a, b) => getTrackMaxNotes(b) - getTrackMaxNotes(a))
+        result.sort((a, b) => (b.matchingDifficulty?.totalNotes || 0) - (a.matchingDifficulty?.totalNotes || 0))
         break
       case 'score_desc':
-        result.sort((a, b) => getTrackBestScore(b) - getTrackBestScore(a))
+        result.sort((a, b) => {
+          const scoreA = a.matchingDifficulty ? getDifficultyScore(a, a.matchingDifficulty) : 0
+          const scoreB = b.matchingDifficulty ? getDifficultyScore(b, b.matchingDifficulty) : 0
+          return scoreB - scoreA
+        })
         break
       case 'accuracy_desc':
-        result.sort((a, b) => getTrackBestAccuracy(b) - getTrackBestAccuracy(a))
+        result.sort((a, b) => {
+          const accA = a.matchingDifficulty ? getDifficultyAccuracy(a, a.matchingDifficulty) : 0
+          const accB = b.matchingDifficulty ? getDifficultyAccuracy(b, b.matchingDifficulty) : 0
+          return accB - accA
+        })
         break
       case 'clear_progress_desc': {
         const getProgress = (t) => {
           if (!t.difficulties) return 0
-          const cleared = t.difficulties.filter(d => {
-            const rec = getBestRecord ? getBestRecord(t.id, d.id) : null
-            return rec?.cleared
-          }).length
+          const cleared = t.difficulties.filter(d => getDifficultyClearStatus(t, d)).length
           return cleared / t.difficulties.length
         }
         result.sort((a, b) => getProgress(b) - getProgress(a))
@@ -263,10 +257,9 @@ export default function TrackSelect({
 
     return result
   }, [
-    tracks, selectedPackId, filterDifficulty, searchQuery, showOnlyUnlocked, sortBy,
-    playerData, bestRecords, levelRange, bpmRange, noteCountRange, clearStatus,
-    getTrackLowestLevel, getTrackHighestLevel, getTrackMinNotes, getTrackMaxNotes,
-    getTrackClearStatus, getTrackBestScore, getTrackBestAccuracy, getBestRecord
+    tracksWithMatchingDifficulty, selectedPackId, searchQuery, showOnlyUnlocked, sortBy,
+    playerData, bestRecords, bpmRange, overallClearStatus,
+    getTrackOverallClearStatus, getDifficultyClearStatus, getDifficultyScore, getDifficultyAccuracy
   ])
 
   useEffect(() => {
@@ -277,8 +270,11 @@ export default function TrackSelect({
 
   useEffect(() => {
     if (filteredTracks.length > 0) {
-      const defaultDiff = filteredTracks[selectedTrackIndex]?.difficulties?.find(d => d.id === 'normal')
-        || filteredTracks[selectedTrackIndex]?.difficulties?.[0]
+      const currentTrack = filteredTracks[selectedTrackIndex]
+      const matchingDiff = currentTrack?.matchingDifficulty
+      const defaultDiff = matchingDiff
+        || currentTrack?.difficulties?.find(d => d.id === 'normal')
+        || currentTrack?.difficulties?.[0]
       setSelectedDifficultyId(defaultDiff?.id || null)
     }
   }, [selectedTrackIndex, filteredTracks])
@@ -694,7 +690,7 @@ export default function TrackSelect({
                 </div>
 
                 <div style={styles.filterGroup}>
-                  <span style={styles.filterLabel}>通关状态:</span>
+                  <span style={styles.filterLabel}>联合通关:</span>
                   <div style={styles.statusChips}>
                     <button
                       style={{
@@ -702,6 +698,7 @@ export default function TrackSelect({
                         ...(clearStatus === 'all' ? styles.statusChipActive : {})
                       }}
                       onClick={() => setClearStatus('all')}
+                      title="与难度、等级、音符数联合筛选"
                     >
                       全部
                     </button>
@@ -711,26 +708,65 @@ export default function TrackSelect({
                         ...(clearStatus === 'none' ? { ...styles.statusChipActive, borderColor: '#ff6666', color: '#ff6666' } : {})
                       }}
                       onClick={() => setClearStatus('none')}
+                      title="匹配难度未通关"
                     >
                       未通关
                     </button>
                     <button
                       style={{
                         ...styles.statusChip,
-                        ...(clearStatus === 'partial' ? { ...styles.statusChipActive, borderColor: '#ffcc00', color: '#ffcc00' } : {})
+                        ...(clearStatus === 'cleared' ? { ...styles.statusChipActive, borderColor: '#66ff99', color: '#66ff99' } : {})
                       }}
-                      onClick={() => setClearStatus('partial')}
+                      onClick={() => setClearStatus('cleared')}
+                      title="匹配难度已通关"
                     >
-                      部分通关
+                      已通关
+                    </button>
+                  </div>
+                </div>
+
+                <div style={styles.filterGroup}>
+                  <span style={styles.filterLabel}>整体状态:</span>
+                  <div style={styles.statusChips}>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(overallClearStatus === 'all' ? styles.statusChipActive : {})
+                      }}
+                      onClick={() => setOverallClearStatus('all')}
+                      title="曲目整体通关状态"
+                    >
+                      全部
                     </button>
                     <button
                       style={{
                         ...styles.statusChip,
-                        ...(clearStatus === 'all_cleared' ? { ...styles.statusChipActive, borderColor: '#66ff99', color: '#66ff99' } : {})
+                        ...(overallClearStatus === 'none' ? { ...styles.statusChipActive, borderColor: '#ff6666', color: '#ff6666' } : {})
                       }}
-                      onClick={() => setClearStatus('all_cleared')}
+                      onClick={() => setOverallClearStatus('none')}
+                      title="所有难度均未通关"
                     >
-                      全部通关
+                      全未通
+                    </button>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(overallClearStatus === 'partial' ? { ...styles.statusChipActive, borderColor: '#ffcc00', color: '#ffcc00' } : {})
+                      }}
+                      onClick={() => setOverallClearStatus('partial')}
+                      title="部分难度已通关"
+                    >
+                      部分通
+                    </button>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(overallClearStatus === 'all_cleared' ? { ...styles.statusChipActive, borderColor: '#66ff99', color: '#66ff99' } : {})
+                      }}
+                      onClick={() => setOverallClearStatus('all_cleared')}
+                      title="所有难度均已通关"
+                    >
+                      全通关
                     </button>
                   </div>
                 </div>
@@ -742,6 +778,7 @@ export default function TrackSelect({
                     setBpmRange({ min: 60, max: 240 })
                     setNoteCountRange({ min: 0, max: 1000 })
                     setClearStatus('all')
+                    setOverallClearStatus('all')
                     setFilterDifficulty('all')
                     setSelectedPackId('all')
                     setSearchQuery('')
@@ -776,6 +813,7 @@ export default function TrackSelect({
               filteredTracks.map((t, i) => {
                 const best = getBestRecord ? getBestRecord(t.id) : null
                 const unlockCheck = checkUnlockCondition(t.unlockCondition, playerData, bestRecords)
+                const matchingDiff = t.matchingDifficulty
                 return (
                   <div
                     key={t.id}
@@ -786,7 +824,14 @@ export default function TrackSelect({
                       ...(i === hoverIndex ? styles.trackCardHover : {}),
                       ...(!unlockCheck.unlocked ? styles.trackCardLocked : {})
                     }}
-                    onClick={() => unlockCheck.unlocked && setSelectedTrackIndex(i)}
+                    onClick={() => {
+                      if (unlockCheck.unlocked) {
+                        setSelectedTrackIndex(i)
+                        if (matchingDiff) {
+                          setSelectedDifficultyId(matchingDiff.id)
+                        }
+                      }
+                    }}
                     onMouseEnter={() => setHoverIndex(i)}
                     onMouseLeave={() => setHoverIndex(-1)}
                   >
@@ -827,19 +872,25 @@ export default function TrackSelect({
                       </div>
                       <div style={styles.trackMeta}>
                         <div style={styles.difficultyList}>
-                          {t.difficulties?.slice(0, viewMode === 'grid' ? 2 : 4).map(d => (
-                            <span
-                              key={d.id}
-                              style={{
-                                ...styles.difficultyDot,
-                                backgroundColor: d.color + '33',
-                                borderColor: d.color
-                              }}
-                              title={`${d.name} Lv.${d.level}`}
-                            >
-                              Lv.{d.level}
-                            </span>
-                          ))}
+                          {t.difficulties?.slice(0, viewMode === 'grid' ? 2 : 4).map(d => {
+                            const isMatching = matchingDiff && d.id === matchingDiff.id
+                            return (
+                              <span
+                                key={d.id}
+                                style={{
+                                  ...styles.difficultyDot,
+                                  backgroundColor: isMatching ? d.color + '66' : d.color + '33',
+                                  borderColor: d.color,
+                                  boxShadow: isMatching ? `0 0 8px ${d.color}88` : 'none',
+                                  transform: isMatching ? 'scale(1.1)' : 'scale(1)',
+                                  fontWeight: isMatching ? 800 : 700
+                                }}
+                                title={`${d.name} Lv.${d.level}${isMatching ? ' ✓ 匹配筛选' : ''}`}
+                              >
+                                {isMatching && '✓ '}Lv.{d.level}
+                              </span>
+                            )
+                          })}
                         </div>
                         {viewMode === 'list' && (
                           <span style={styles.bpmBadge}>
@@ -1688,7 +1739,9 @@ const styles = {
     borderRadius: '4px',
     fontSize: '10px',
     fontWeight: 700,
-    border: '1px solid'
+    border: '1px solid',
+    transition: 'all 0.2s ease',
+    display: 'inline-block'
   },
   bpmBadge: {
     padding: '2px 8px',
