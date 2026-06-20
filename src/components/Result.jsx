@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { RANK_COLORS } from '../data/growthData.js'
+import { RANK_COLORS, TIER_GRADES, TIER_COLORS, TIER_NAMES, getTierInfo } from '../data/growthData.js'
 import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
@@ -521,6 +521,16 @@ export default function Result({
             </div>
           </div>
         </div>
+
+        {result.tier && (
+          <TierGradeSection
+            tier={result.tier}
+            breakdown={result.tierBreakdown}
+            accuracy={result.accuracy}
+            health={result.health}
+            showDetails={showDetails}
+          />
+        )}
 
         <div style={{
           ...styles.statsGrid,
@@ -1188,6 +1198,121 @@ function HistoryList({ entries, formatDate, getRankBadgeStyle }) {
   )
 }
 
+function TierGradeSection({ tier, breakdown, accuracy, health, showDetails }) {
+  const tierInfo = getTierInfo(tier)
+  const tierIndex = TIER_GRADES.findIndex(t => t.id === tier)
+  const nextTier = tierIndex > 0 ? TIER_GRADES[tierIndex - 1] : null
+
+  return (
+    <div style={{
+      ...tierStyles.container,
+      opacity: showDetails ? 1 : 0,
+      transform: showDetails ? 'translateY(0)' : 'translateY(20px)'
+    }}>
+      <div style={tierStyles.header}>
+        <span style={tierStyles.headerIcon}>⚔️</span>
+        <span style={tierStyles.headerTitle}>段位评价</span>
+      </div>
+
+      <div style={tierStyles.mainRow}>
+        <div style={{
+          ...tierStyles.tierBadge,
+          background: tierInfo.bg,
+          color: tierInfo.color
+        }}>
+          <div style={tierStyles.tierId}>{tier}</div>
+          <div style={tierStyles.tierName}>{tierInfo.name}</div>
+        </div>
+
+        <div style={tierStyles.breakdownColumn}>
+          <TierBreakdownBar
+            label={breakdown.accuracy.label}
+            score={breakdown.accuracy.score}
+            max={breakdown.accuracy.max}
+            displayValue={`${accuracy.toFixed(2)}%`}
+            color="#ffcc00"
+          />
+          <TierBreakdownBar
+            label={breakdown.combo.label}
+            score={breakdown.combo.score}
+            max={breakdown.combo.max}
+            displayValue={breakdown.combo.value === 'FC' ? 'FULL COMBO' : `${Math.round((breakdown.combo.ratio || 0) * 100)}%`}
+            color="#00ffcc"
+            isFC={breakdown.isFullCombo}
+          />
+          <TierBreakdownBar
+            label={breakdown.health.label}
+            score={breakdown.health.score}
+            max={breakdown.health.max}
+            displayValue={`${Math.round(health)}%`}
+            color="#ff3366"
+          />
+
+          <div style={tierStyles.totalRow}>
+            <span style={tierStyles.totalLabel}>综合评分</span>
+            <span style={tierStyles.totalValue}>
+              {breakdown.totalScore} / {breakdown.maxScore}
+            </span>
+            <div style={tierStyles.totalBarBg}>
+              <div style={{
+                ...tierStyles.totalBarFill,
+                width: `${(breakdown.totalScore / breakdown.maxScore) * 100}%`,
+                background: tierInfo.bg
+              }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {nextTier && (
+        <div style={tierStyles.nextTierRow}>
+          <span style={tierStyles.nextTierLabel}>距下一段位</span>
+          <span style={{
+            ...tierStyles.nextTierName,
+            color: nextTier.color
+          }}>
+            {nextTier.id} {nextTier.name}
+          </span>
+          <div style={tierStyles.nextTierHints}>
+            {accuracy < nextTier.threshold && (
+              <span style={tierStyles.nextTierHint}>↑ 准确率需达 {nextTier.threshold}%</span>
+            )}
+            {nextTier.fullCombo && !breakdown.isFullCombo && (
+              <span style={tierStyles.nextTierHint}>↑ 需要满连 (FC)</span>
+            )}
+            {health < nextTier.minHealth && (
+              <span style={tierStyles.nextTierHint}>↑ 生命值需 ≥ {nextTier.minHealth}%</span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TierBreakdownBar({ label, score, max, displayValue, color, isFC }) {
+  return (
+    <div style={tierStyles.breakdownItem}>
+      <div style={tierStyles.breakdownHeader}>
+        <span style={{ ...tierStyles.breakdownLabel, color }}>{label}</span>
+        <span style={tierStyles.breakdownValue}>{displayValue}</span>
+      </div>
+      <div style={tierStyles.breakdownBarRow}>
+        {Array.from({ length: max }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              ...tierStyles.breakdownDot,
+              background: i < score ? color : 'rgba(255,255,255,0.08)',
+              boxShadow: i < score ? `0 0 8px ${color}66` : 'none'
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function StatItem({ label, value, color, total, count }) {
   const percent = total > 0 ? Math.round((count / total) * 100) : 0
   return (
@@ -1284,6 +1409,159 @@ function CompareItem({ label, currentValue, bestValue, format, isHigherBetter, i
       </div>
     </div>
   )
+}
+
+const tierStyles = {
+  container: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px',
+    padding: '20px 24px',
+    marginBottom: '20px',
+    transition: 'all 0.5s ease-out'
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '16px'
+  },
+  headerIcon: {
+    fontSize: '18px'
+  },
+  headerTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    letterSpacing: '3px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  mainRow: {
+    display: 'flex',
+    gap: '24px',
+    alignItems: 'center'
+  },
+  tierBadge: {
+    flex: '0 0 120px',
+    padding: '16px 12px',
+    borderRadius: '14px',
+    textAlign: 'center',
+    border: '1px solid rgba(255,255,255,0.15)',
+    boxShadow: '0 4px 30px rgba(0,0,0,0.3)'
+  },
+  tierId: {
+    fontSize: '36px',
+    fontWeight: 900,
+    letterSpacing: '2px',
+    lineHeight: 1.1
+  },
+  tierName: {
+    fontSize: '13px',
+    fontWeight: 600,
+    opacity: 0.8,
+    marginTop: '4px',
+    letterSpacing: '2px'
+  },
+  breakdownColumn: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  breakdownItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  breakdownHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  breakdownLabel: {
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '1.5px'
+  },
+  breakdownValue: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'monospace',
+    fontWeight: 600
+  },
+  breakdownBarRow: {
+    display: 'flex',
+    gap: '6px'
+  },
+  breakdownDot: {
+    width: '28px',
+    height: '8px',
+    borderRadius: '4px',
+    transition: 'all 0.3s ease-out'
+  },
+  totalRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginTop: '4px',
+    paddingTop: '8px',
+    borderTop: '1px solid rgba(255,255,255,0.06)'
+  },
+  totalLabel: {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '1.5px'
+  },
+  totalValue: {
+    fontSize: '14px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    color: '#fff'
+  },
+  totalBarBg: {
+    flex: 1,
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  totalBarFill: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.5s ease-out'
+  },
+  nextTierRow: {
+    marginTop: '12px',
+    paddingTop: '12px',
+    borderTop: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap'
+  },
+  nextTierLabel: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: 600
+  },
+  nextTierName: {
+    fontSize: '14px',
+    fontWeight: 800,
+    letterSpacing: '1px'
+  },
+  nextTierHints: {
+    display: 'flex',
+    gap: '12px',
+    flexWrap: 'wrap'
+  },
+  nextTierHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.45)',
+    padding: '3px 10px',
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.06)'
+  }
 }
 
 const statStyles = {

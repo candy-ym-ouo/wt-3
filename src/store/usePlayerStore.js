@@ -341,6 +341,7 @@ export function usePlayerStore() {
         stats: existing && !checks.isNewBest ? existing.stats : { ...result.stats },
         totalNotes: existing && !checks.isNewBest ? existing.totalNotes : result.totalNotes,
         cleared: true,
+        tier: existing && !checks.isNewBest ? existing.tier : (result.tier || null),
         updatedAt: new Date().toISOString(),
         previousScore: existing?.score || 0,
         previousAccuracy: existing?.accuracy || 0,
@@ -380,7 +381,8 @@ export function usePlayerStore() {
       cleared: result.cleared,
       playedAt: new Date().toISOString(),
       playbackSpeed: result.playbackSpeed || 1,
-      isPracticeMode: result.isPracticeMode || false
+      isPracticeMode: result.isPracticeMode || false,
+      tier: result.tier || null
     }
     
     setPlayHistory(prev => {
@@ -766,6 +768,7 @@ export function usePlayerStore() {
             stats: existing && !recordChecks.isNewBest ? existing.stats : { ...result.stats },
             totalNotes: existing && !recordChecks.isNewBest ? existing.totalNotes : result.totalNotes,
             cleared: true,
+            tier: existing && !recordChecks.isNewBest ? existing.tier : (result.tier || null),
             updatedAt: new Date().toISOString()
           }
         }
@@ -789,7 +792,8 @@ export function usePlayerStore() {
       totalNotes: result.totalNotes,
       cleared: result.cleared,
       playedAt: new Date().toISOString(),
-      isNewBest: recordChecks.isNewBest
+      isNewBest: recordChecks.isNewBest,
+      tier: result.tier || null
     }
 
     nextData.trackRecords = [record, ...nextData.trackRecords].slice(0, 200)

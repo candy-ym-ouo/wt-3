@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { calculateTierGrade, getTierInfo } from '../data/growthData.js'
 
 export default function ScorePanel({
   score,
@@ -10,7 +11,8 @@ export default function ScorePanel({
   duration,
   stats,
   trackTitle,
-  judgeFeedback
+  judgeFeedback,
+  totalNotes
 }) {
   const [displayScore, setDisplayScore] = useState(0)
   const [comboFlash, setComboFlash] = useState(false)
@@ -44,6 +46,21 @@ export default function ScorePanel({
   }
 
   const healthColor = health > 70 ? '#00ffcc' : health > 40 ? '#ffcc00' : '#ff3366'
+
+  const estimatedTier = useMemo(() => {
+    if (!totalNotes || totalNotes <= 0) return null
+    const totalJudged = stats.perfect + stats.great + stats.good + stats.miss
+    if (totalJudged <= 0) return null
+    const accuracy = (stats.perfect * 100 + stats.great * 75 + stats.good * 50) / totalJudged
+    return calculateTierGrade({
+      accuracy,
+      maxCombo,
+      totalNotes,
+      health
+    })
+  }, [stats, maxCombo, totalNotes, health])
+
+  const estimatedTierInfo = estimatedTier ? getTierInfo(estimatedTier) : null
 
   return (
     <div style={styles.container}>
@@ -116,6 +133,23 @@ export default function ScorePanel({
           />
         </div>
       </div>
+
+      {estimatedTierInfo && (
+        <div style={styles.tierSection}>
+          <div style={styles.tierHeader}>
+            <span style={styles.tierLabel}>TIER</span>
+          </div>
+          <div style={{
+            ...styles.tierBadge,
+            background: `${estimatedTierInfo.color}22`,
+            borderColor: `${estimatedTierInfo.color}55`,
+            color: estimatedTierInfo.color
+          }}>
+            <span style={styles.tierId}>{estimatedTier}</span>
+            <span style={styles.tierName}>{estimatedTierInfo.name}</span>
+          </div>
+        </div>
+      )}
 
       {combo > 0 && (
         <div
@@ -314,6 +348,44 @@ const styles = {
     height: '100%',
     borderRadius: '5px',
     transition: 'width 0.2s ease-out'
+  },
+  tierSection: {
+    position: 'absolute',
+    top: '160px',
+    right: '32px',
+    width: '200px'
+  },
+  tierHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '6px'
+  },
+  tierLabel: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '3px'
+  },
+  tierBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid',
+    transition: 'all 0.3s ease-out'
+  },
+  tierId: {
+    fontSize: '18px',
+    fontWeight: 900,
+    fontFamily: 'monospace',
+    letterSpacing: '1px'
+  },
+  tierName: {
+    fontSize: '12px',
+    fontWeight: 600,
+    letterSpacing: '1px',
+    opacity: 0.8
   },
   comboSection: {
     position: 'absolute',

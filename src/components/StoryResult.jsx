@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { RANK_COLORS } from '../data/growthData.js'
+import { RANK_COLORS, getTierInfo, TIER_NAMES } from '../data/growthData.js'
 
 export default function StoryResult({
   storyResult,
@@ -170,6 +170,28 @@ export default function StoryResult({
         }}>
           RANK
         </div>
+        {result.tier && (() => {
+          const ti = getTierInfo(result.tier)
+          return (
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '8px',
+              padding: '4px 14px',
+              background: `${ti.color}22`,
+              border: `1px solid ${ti.color}55`,
+              borderRadius: '8px',
+              color: ti.color,
+              fontSize: '14px',
+              fontWeight: 700,
+              letterSpacing: '1px'
+            }}>
+              <span>{result.tier}</span>
+              <span style={{ opacity: 0.7, fontSize: '12px' }}>{ti.name}</span>
+            </div>
+          )
+        })()}
       </div>
 
       <div style={{

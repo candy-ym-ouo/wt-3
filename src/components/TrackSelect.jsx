@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { TITLES, RANK_COLORS } from '../data/growthData.js'
+import { TITLES, RANK_COLORS, TIER_COLORS, getTierInfo } from '../data/growthData.js'
 import {
   TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty,
   sortDifficulties, getTrackDifficultyStats, getTrackDifficultySummary,
@@ -902,6 +902,23 @@ export default function TrackSelect({
                         {best && (
                           <div style={styles.trackBest}>
                             <span style={{ ...styles.bestRank, color: RANK_COLORS[best.rank] }}>{best.rank}</span>
+                            {best.tier && (() => {
+                              const ti = getTierInfo(best.tier)
+                              return (
+                                <span style={{
+                                  padding: '1px 6px',
+                                  background: `${ti.color}22`,
+                                  border: `1px solid ${ti.color}44`,
+                                  borderRadius: '4px',
+                                  color: ti.color,
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  letterSpacing: '0.5px'
+                                }}>
+                                  {best.tier}
+                                </span>
+                              )
+                            })()}
                             <span style={styles.bestScore}>{best.score.toLocaleString()}</span>
                           </div>
                         )}
@@ -1079,7 +1096,7 @@ export default function TrackSelect({
                         }}
                         onClick={() => setSelectedDifficultyId(diff.id)}
                         title={diffRecord?.cleared
-                          ? `最佳: ${diffRecord.score.toLocaleString()} [${diffRecord.rank}] ${diffRecord.accuracy.toFixed(2)}%`
+                          ? `最佳: ${diffRecord.score.toLocaleString()} [${diffRecord.rank}]${diffRecord.tier ? ` ⚔${diffRecord.tier}` : ''} ${diffRecord.accuracy.toFixed(2)}%`
                           : `${diff.name} Lv.${diff.level}`
                         }
                       >

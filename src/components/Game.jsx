@@ -5,6 +5,7 @@ import ScorePanel from './ScorePanel.jsx'
 import PauseMenu from './PauseMenu.jsx'
 import { usePracticeStore } from '../store/usePracticeStore.js'
 import { useCalibrationStore } from '../store/useCalibrationStore.js'
+import { calculateTierGrade, getTierBreakdown } from '../data/growthData.js'
 
 const JUDGE_WINDOWS = {
   perfect: 0.05,
@@ -581,7 +582,19 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       replayData,
       judgmentOffsetMs: finalJudgmentOffsetMs,
       initialJudgmentOffsetMs: initialJudgmentOffsetMs,
-      offsetChanged: finalJudgmentOffsetMs !== initialJudgmentOffsetMs
+      offsetChanged: finalJudgmentOffsetMs !== initialJudgmentOffsetMs,
+      tier: calculateTierGrade({
+        accuracy: Math.round(accuracy * 100) / 100,
+        maxCombo: maxComboRef.current,
+        totalNotes,
+        health: healthRef.current
+      }),
+      tierBreakdown: getTierBreakdown({
+        accuracy: Math.round(accuracy * 100) / 100,
+        maxCombo: maxComboRef.current,
+        totalNotes,
+        health: healthRef.current
+      })
     }
 
     setTimeout(() => {
@@ -1052,6 +1065,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         stats={stats}
         trackTitle={track.title}
         judgeFeedback={judgeFeedback}
+        totalNotes={getFilteredNotes().length}
       />
 
       {isPracticeMode && (

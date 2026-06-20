@@ -615,6 +615,63 @@ export const BADGE_RARITY_INFO = {
   legendary: { name: '传说', color: '#ffcc00', bgColor: 'rgba(255,204,0,0.15)' }
 }
 
+export const TIER_GRADES = [
+  { id: 'SSS',  name: '天命',   color: '#fff',    bg: 'linear-gradient(135deg, #ffcc00, #ff3366, #cc66ff)', threshold: 98,  fullCombo: true,  minHealth: 100 },
+  { id: 'SS+',  name: '化境',   color: '#ffcc00', bg: 'linear-gradient(135deg, #ffcc00, #ff9900)',             threshold: 96,  fullCombo: true,  minHealth: 90 },
+  { id: 'SS',   name: '极意',   color: '#ffcc00', bg: 'linear-gradient(135deg, #ffcc00, #ff9900)',             threshold: 93,  fullCombo: true,  minHealth: 70 },
+  { id: 'S+',   name: '超凡',   color: '#ff9900', bg: 'linear-gradient(135deg, #ff9900, #ff3366)',             threshold: 95,  fullCombo: false, minHealth: 90 },
+  { id: 'S',    name: '至臻',   color: '#ff3366', bg: 'linear-gradient(135deg, #ff3366, #cc2255)',             threshold: 95,  fullCombo: false, minHealth: 50 },
+  { id: 'A+',   name: '精英',   color: '#00ffcc', bg: 'linear-gradient(135deg, #00ffcc, #00ccaa)',             threshold: 90,  fullCombo: false, minHealth: 50 },
+  { id: 'A',    name: '优秀',   color: '#00ccaa', bg: 'linear-gradient(135deg, #00ccaa, #009988)',             threshold: 85,  fullCombo: false, minHealth: 40 },
+  { id: 'B+',   name: '良好',   color: '#6699ff', bg: 'linear-gradient(135deg, #6699ff, #4477dd)',             threshold: 80,  fullCombo: false, minHealth: 30 },
+  { id: 'B',    name: '熟练',   color: '#4477dd', bg: 'linear-gradient(135deg, #4477dd, #3366cc)',             threshold: 75,  fullCombo: false, minHealth: 20 },
+  { id: 'C',    name: '及格',   color: '#cc66ff', bg: 'linear-gradient(135deg, #cc66ff, #9933cc)',             threshold: 65,  fullCombo: false, minHealth: 10 },
+  { id: 'D',    name: '生疏',   color: '#999999', bg: 'linear-gradient(135deg, #999999, #666666)',             threshold: 0,   fullCombo: false, minHealth: 0 }
+]
+
+export const TIER_COLORS = TIER_GRADES.reduce((acc, t) => {
+  acc[t.id] = t.color
+  return acc
+}, {})
+
+export const TIER_NAMES = TIER_GRADES.reduce((acc, t) => {
+  acc[t.id] = t.name
+  return acc
+}, {})
+
+export function calculateTierGrade({ accuracy, maxCombo, totalNotes, health }) {
+  const isFullCombo = totalNotes > 0 && maxCombo >= totalNotes
+
+  for (const tier of TIER_GRADES) {
+    if (accuracy < tier.threshold) continue
+    if (tier.fullCombo && !isFullCombo) continue
+    if (health < tier.minHealth) continue
+    return tier.id
+  }
+
+  return 'D'
+}
+
+export function getTierInfo(tierId) {
+  return TIER_GRADES.find(t => t.id === tierId) || TIER_GRADES[TIER_GRADES.length - 1]
+}
+
+export function getTierBreakdown({ accuracy, maxCombo, totalNotes, health }) {
+  const isFullCombo = totalNotes > 0 && maxCombo >= totalNotes
+  const accScore = accuracy >= 98 ? 5 : accuracy >= 95 ? 4 : accuracy >= 90 ? 3 : accuracy >= 80 ? 2 : accuracy >= 65 ? 1 : 0
+  const comboScore = isFullCombo ? 3 : maxCombo / totalNotes >= 0.8 ? 2 : maxCombo / totalNotes >= 0.5 ? 1 : 0
+  const healthScore = health >= 100 ? 3 : health >= 80 ? 2 : health >= 40 ? 1 : 0
+
+  return {
+    accuracy: { value: accuracy, score: accScore, max: 5, label: '准确率' },
+    combo: { value: isFullCombo ? 'FC' : maxCombo, score: comboScore, max: 3, label: isFullCombo ? '满连' : '连击率', ratio: totalNotes > 0 ? maxCombo / totalNotes : 0 },
+    health: { value: health, score: healthScore, max: 3, label: '生命值' },
+    totalScore: accScore + comboScore + healthScore,
+    maxScore: 11,
+    isFullCombo
+  }
+}
+
 export const DIFFICULTY_WEIGHT = {
   '简单': 1.0,
   '普通': 1.2,
