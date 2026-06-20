@@ -503,7 +503,7 @@ export default function Result({
               <CompareItem
                 label="分数"
                 currentValue={result.score}
-                bestValue={bestRecord.score}
+                bestValue={bestRecord.previousScore ?? bestRecord.score}
                 format={(v) => String(v).padStart(8, '0')}
                 isHigherBetter={true}
                 isNewRecord={recordChecks?.isNewBest}
@@ -511,7 +511,7 @@ export default function Result({
               <CompareItem
                 label="准确率"
                 currentValue={result.accuracy}
-                bestValue={bestRecord.accuracy}
+                bestValue={bestRecord.previousAccuracy ?? bestRecord.accuracy}
                 format={(v) => `${v.toFixed(2)}%`}
                 isHigherBetter={true}
                 isNewRecord={recordChecks?.isNewAccuracy}
@@ -519,7 +519,7 @@ export default function Result({
               <CompareItem
                 label="连击"
                 currentValue={result.maxCombo}
-                bestValue={bestRecord.maxCombo}
+                bestValue={bestRecord.previousMaxCombo ?? bestRecord.maxCombo}
                 format={(v) => String(v)}
                 isHigherBetter={true}
                 isNewRecord={recordChecks?.isNewCombo}
@@ -527,7 +527,7 @@ export default function Result({
               <CompareItem
                 label="失误"
                 currentValue={result.stats.miss}
-                bestValue={bestRecord.stats?.miss ?? 0}
+                bestValue={bestRecord.previousMiss ?? bestRecord.stats?.miss ?? 0}
                 format={(v) => String(v)}
                 isHigherBetter={false}
                 isNewRecord={false}

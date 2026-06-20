@@ -325,6 +325,9 @@ export function usePlayerStore() {
         cleared: true,
         updatedAt: new Date().toISOString(),
         previousScore: existing?.score || 0,
+        previousAccuracy: existing?.accuracy || 0,
+        previousMaxCombo: existing?.maxCombo || 0,
+        previousMiss: existing?.stats?.miss ?? 0,
         scoreDelta: checks.isNewBest ? (result.score - (existing?.score || 0)) : 0
       }
       
