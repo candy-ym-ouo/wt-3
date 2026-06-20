@@ -31,11 +31,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
   const calibrationStore = useCalibrationStore()
-  const { calibration } = calibrationStore
+  const { calibration, setJudgmentOffset, addCalibrationResult } = calibrationStore
 
-  const judgmentOffsetMs = calibration.judgmentOffset || 0
+  const initialJudgmentOffsetMs = calibration.judgmentOffset || 0
   const audioOffsetMs = calibration.audioOffset || 0
-  const judgmentOffsetSec = judgmentOffsetMs / 1000
   const audioOffsetSec = audioOffsetMs / 1000
 
   const tutorialPlaybackSpeed = isTutorialMode ? 0.6 : 1.0
@@ -61,6 +60,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     if (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) return dailyChallengeModifiers.playbackSpeed
     return practiceSettings.playbackSpeed
   })
+  const [currentJudgmentOffsetMs, setCurrentJudgmentOffsetMs] = useState(initialJudgmentOffsetMs)
+  const judgmentOffsetSecRef = useRef(initialJudgmentOffsetMs / 1000)
+  const hasOffsetChangedRef = useRef(false)
 
   const gameDataRef = useRef({
     notes: [],
@@ -355,6 +357,27 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     }
   }, [practiceSettings.replayMisses, track.bpm, track.duration])
 
+  const updateJudgmentOffset = useCallback((offsetMs) => {
+    setCurrentJudgmentOffsetMs(offsetMs)
+    judgmentOffsetSecRef.current = offsetMs / 1000
+    hasOffsetChangedRef.current = true
+  }, [])
+
+  const applyAndSaveOffset = useCallback(() => {
+    if (hasOffsetChangedRef.current) {
+      const finalOffset = Math.round(judgmentOffsetSecRef.current * 1000)
+      setJudgmentOffset(finalOffset)
+      addCalibrationResult({
+        type: 'ingame_adjust',
+        audioOffset: audioOffsetMs,
+        judgmentOffset: finalOffset,
+        trackId: track.id,
+        trackTitle: track.title
+      })
+      hasOffsetChangedRef.current = false
+    }
+  }, [setJudgmentOffset, addCalibrationResult, audioOffsetMs, track.id, track.title])
+
   const judgeNote = useCallback((lane, timeNow) => {
     const data = gameDataRef.current
     let closestNote = null
@@ -370,7 +393,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     for (let i = 0; i < data.activeNotes.length; i++) {
       const note = data.activeNotes[i]
       if (note.lane !== lane || note.hit || note.missed) continue
-      const effectiveNoteTime = note.time + judgmentOffsetSec
+      const effectiveNoteTime = note.time + judgmentOffsetSecRef.current
       const diff = Math.abs(effectiveNoteTime - timeNow)
       if (diff < closestDiff && diff < adjustedJudgeWindows.miss) {
         closestDiff = diff
@@ -484,7 +507,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     playHitSound(judgeType)
 
     return judgeType
-  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, judgmentOffsetSec])
+  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, tutorialJudgeMultiplier])
 
   const getFilteredNotes = useCallback(() => {
     const range = practiceRange()
@@ -540,6 +563,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       }
     }
 
+    applyAndSaveOffset()
+
+    const finalJudgmentOffsetMs = Math.round(judgmentOffsetSecRef.current * 1000)
+
     const result = {
       score: scoreRef.current,
       maxCombo: maxComboRef.current,
@@ -551,13 +578,16 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       cleared: healthRef.current > 0,
       isPracticeMode,
       playbackSpeed: currentPlaybackSpeed,
-      replayData
+      replayData,
+      judgmentOffsetMs: finalJudgmentOffsetMs,
+      initialJudgmentOffsetMs: initialJudgmentOffsetMs,
+      offsetChanged: finalJudgmentOffsetMs !== initialJudgmentOffsetMs
     }
 
     setTimeout(() => {
       onEnd(result)
     }, 300)
-  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track])
+  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track, applyAndSaveOffset, initialJudgmentOffsetMs])
 
   const jumpToSection = useCallback((startBar, endBar) => {
     const startTime = startBar * barDuration
@@ -759,7 +789,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
         const adjustedMissWindow = JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
         activeData.activeNotes.forEach(note => {
-          if (!note.hit && !note.missed && note.time + judgmentOffsetSec + adjustedMissWindow < now) {
+          if (!note.hit && !note.missed && note.time + judgmentOffsetSecRef.current + adjustedMissWindow < now) {
             note.missed = true
             const comboBefore = comboRef.current
             comboRef.current = 0
@@ -1264,6 +1294,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             startGame()
           }}
           onQuit={onQuit}
+          judgmentOffsetMs={currentJudgmentOffsetMs}
+          onUpdateJudgmentOffset={updateJudgmentOffset}
+          onApplyAndSaveOffset={applyAndSaveOffset}
         />
       )}
 

@@ -1,4 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+const OFFSET_RANGE = 100
+const OFFSET_STEP = 1
 
 export default function PauseMenu({
   score,
@@ -12,9 +15,31 @@ export default function PauseMenu({
   duration,
   onResume,
   onRestart,
-  onQuit
+  onQuit,
+  judgmentOffsetMs = 0,
+  onUpdateJudgmentOffset,
+  onApplyAndSaveOffset
 }) {
   const [showKeyHints, setShowKeyHints] = useState(false)
+  const [showOffsetAdjust, setShowOffsetAdjust] = useState(false)
+  const [localOffset, setLocalOffset] = useState(judgmentOffsetMs)
+
+  useEffect(() => {
+    setLocalOffset(judgmentOffsetMs)
+  }, [judgmentOffsetMs])
+
+  const handleOffsetChange = (value) => {
+    setLocalOffset(value)
+    if (onUpdateJudgmentOffset) {
+      onUpdateJudgmentOffset(value)
+    }
+  }
+
+  const handleApplyAndSave = () => {
+    if (onApplyAndSaveOffset) {
+      onApplyAndSaveOffset()
+    }
+  }
 
   const formatTime = (sec) => {
     const m = Math.floor(Math.max(0, sec) / 60)
@@ -143,6 +168,9 @@ export default function PauseMenu({
             </div>
 
             <div style={styles.buttonGrid}>
+              <button style={styles.offsetAdjustBtn} onClick={() => setShowOffsetAdjust(true)}>
+                🎯 判定微调
+              </button>
               <button style={styles.keyHintBtn} onClick={() => setShowKeyHints(true)}>
                 🎹 键位提示
               </button>
@@ -151,6 +179,180 @@ export default function PauseMenu({
               </button>
               <button style={styles.quitBtn} onClick={handleQuit}>
                 ✕ 退出游戏
+              </button>
+            </div>
+          </>
+        ) : showOffsetAdjust ? (
+          <>
+            <div style={styles.offsetAdjustSection}>
+              <h3 style={styles.sectionTitle}>🎯 判定偏移微调</h3>
+              <p style={styles.offsetHint}>
+                调整判定窗口的整体偏移。正值判定窗口后移（适合按键偏早），负值前移（适合按键偏晚）。
+                <br />
+                <span style={{ color: '#00ffcc' }}>调整后点击"继续游戏"即可实时测试效果！</span>
+              </p>
+
+              <div style={styles.offsetCard}>
+                <div style={styles.offsetCardHeader}>
+                  <span style={styles.offsetCardIcon}>🎯</span>
+                  <span style={styles.offsetCardTitle}>判定偏移</span>
+                  <span style={{
+                    ...styles.offsetValue,
+                    color: localOffset === 0 ? 'rgba(255,255,255,0.5)' : localOffset > 0 ? '#00ffcc' : '#ffcc00'
+                  }}>
+                    {localOffset > 0 ? '+' : ''}{localOffset}ms
+                  </span>
+                </div>
+
+                <div style={styles.offsetSliderRow}>
+                  <span style={styles.offsetSliderLabel}>-{OFFSET_RANGE}ms</span>
+                  <div style={styles.offsetSliderTrack}>
+                    <div
+                      style={{
+                        ...styles.offsetSliderFill,
+                        width: `${((localOffset + OFFSET_RANGE) / (OFFSET_RANGE * 2)) * 100}%`,
+                        background: localOffset === 0
+                          ? 'rgba(255,255,255,0.2)'
+                          : localOffset > 0
+                            ? 'linear-gradient(90deg, rgba(255,255,255,0.1), #00ffcc)'
+                            : 'linear-gradient(270deg, rgba(255,255,255,0.1), #ffcc00)'
+                      }}
+                    />
+                    <div
+                      style={{
+                        ...styles.offsetSliderCenter,
+                        left: `${(OFFSET_RANGE / (OFFSET_RANGE * 2)) * 100}%`
+                      }}
+                    />
+                    <input
+                      type="range"
+                      min={-OFFSET_RANGE}
+                      max={OFFSET_RANGE}
+                      step={OFFSET_STEP}
+                      value={localOffset}
+                      onChange={e => handleOffsetChange(Number(e.target.value))}
+                      style={styles.offsetSliderInput}
+                    />
+                  </div>
+                  <span style={styles.offsetSliderLabel}>+{OFFSET_RANGE}ms</span>
+                </div>
+
+                <div style={styles.offsetPresets}>
+                  {[-50, -20, -10, 0, 10, 20, 50].map(v => (
+                    <button
+                      key={v}
+                      style={{
+                        ...styles.offsetPresetBtn,
+                        background: localOffset === v
+                          ? 'linear-gradient(135deg, #00ffcc, #00ccaa)'
+                          : 'rgba(255,255,255,0.05)',
+                        color: localOffset === v ? '#00332a' : 'rgba(255,255,255,0.7)'
+                      }}
+                      onClick={() => handleOffsetChange(v)}
+                    >
+                      {v > 0 ? '+' : ''}{v}ms
+                    </button>
+                  ))}
+                </div>
+
+                <div style={styles.offsetFineTune}>
+                  <button 
+                    style={styles.fineTuneBtn}
+                    onClick={() => handleOffsetChange(Math.max(-OFFSET_RANGE, localOffset - 5))}
+                  >
+                    -5ms
+                  </button>
+                  <button 
+                    style={styles.fineTuneBtn}
+                    onClick={() => handleOffsetChange(Math.max(-OFFSET_RANGE, localOffset - 1))}
+                  >
+                    -1ms
+                  </button>
+                  <button 
+                    style={styles.fineTuneBtn}
+                    onClick={() => handleOffsetChange(0)}
+                  >
+                    归零
+                  </button>
+                  <button 
+                    style={styles.fineTuneBtn}
+                    onClick={() => handleOffsetChange(Math.min(OFFSET_RANGE, localOffset + 1))}
+                  >
+                    +1ms
+                  </button>
+                  <button 
+                    style={styles.fineTuneBtn}
+                    onClick={() => handleOffsetChange(Math.min(OFFSET_RANGE, localOffset + 5))}
+                  >
+                    +5ms
+                  </button>
+                </div>
+
+                <div style={styles.judgeWindowPreview}>
+                  <span style={styles.judgeWindowLabel}>判定窗口预览</span>
+                  <div style={styles.judgeWindowTrack}>
+                    {[
+                      { label: 'MISS', range: 220, color: '#ff3366' },
+                      { label: 'GOOD', range: 160, color: '#ffcc00' },
+                      { label: 'GREAT', range: 100, color: '#00ffcc' },
+                      { label: 'PERFECT', range: 50, color: '#fff' }
+                    ].map((w, i) => {
+                      const offsetShift = (localOffset / 220) * 50
+                      return (
+                        <div key={i} style={styles.judgeWindowRow}>
+                          <span style={{ ...styles.judgeWindowName, color: w.color }}>{w.label}</span>
+                          <div style={styles.judgeWindowBar}>
+                            <div
+                              style={{
+                                ...styles.judgeWindowFill,
+                                width: `${(w.range / 220) * 100}%`,
+                                background: `${w.color}44`,
+                                border: `1px solid ${w.color}66`,
+                                transform: `translateX(${offsetShift}%)`
+                              }}
+                            />
+                            <div style={styles.judgeWindowCenter} />
+                          </div>
+                          <span style={styles.judgeWindowMs}>±{w.range}ms</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.offsetInfo}>
+                <div style={styles.offsetInfoItem}>
+                  <span style={styles.offsetInfoLabel}>当前值</span>
+                  <span style={{
+                    ...styles.offsetInfoValue,
+                    color: localOffset === 0 ? 'rgba(255,255,255,0.5)' : localOffset > 0 ? '#00ffcc' : '#ffcc00'
+                  }}>
+                    {localOffset > 0 ? '+' : ''}{localOffset}ms
+                  </span>
+                </div>
+                <div style={styles.offsetInfoItem}>
+                  <span style={styles.offsetInfoLabel}>调整建议</span>
+                  <span style={styles.offsetInfoTip}>
+                    {localOffset < -20 ? '判定窗口大幅前移，适合按键偏晚的玩家' :
+                     localOffset < -10 ? '判定窗口前移，适合按键稍晚的玩家' :
+                     localOffset > 20 ? '判定窗口大幅后移，适合按键偏早的玩家' :
+                     localOffset > 10 ? '判定窗口后移，适合按键稍早的玩家' :
+                     '判定窗口居中'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={styles.buttonRow}>
+              <button style={styles.applySaveBtn} onClick={handleApplyAndSave}>
+                💾 保存为默认设置
+              </button>
+            </div>
+
+            <div style={styles.buttonRow}>
+              <button style={styles.resumeBtn} onClick={() => setShowOffsetAdjust(false)}>
+                ← 返回
               </button>
             </div>
           </>
@@ -421,8 +623,21 @@ const styles = {
   },
   buttonGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '10px'
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '10px',
+    marginBottom: '12px'
+  },
+  offsetAdjustBtn: {
+    padding: '12px 8px',
+    background: 'linear-gradient(135deg, #ff66cc, #cc44aa)',
+    border: 'none',
+    borderRadius: '10px',
+    color: '#fff',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 4px 15px rgba(255,102,204,0.3)'
   },
   resumeBtn: {
     width: '100%',
@@ -551,5 +766,229 @@ const styles = {
   hintDesc: {
     fontSize: '12px',
     color: 'rgba(255,255,255,0.6)'
+  },
+  offsetAdjustSection: {
+    marginBottom: '20px'
+  },
+  offsetHint: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    marginBottom: '16px',
+    lineHeight: '1.6'
+  },
+  offsetCard: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    padding: '20px',
+    marginBottom: '16px'
+  },
+  offsetCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '16px'
+  },
+  offsetCardIcon: {
+    fontSize: '20px'
+  },
+  offsetCardTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#fff',
+    flex: 1
+  },
+  offsetValue: {
+    fontSize: '20px',
+    fontWeight: 800,
+    fontFamily: 'monospace'
+  },
+  offsetSliderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '16px'
+  },
+  offsetSliderLabel: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    fontFamily: 'monospace',
+    minWidth: '48px'
+  },
+  offsetSliderTrack: {
+    flex: 1,
+    height: '36px',
+    background: 'rgba(255,255,255,0.05)',
+    borderRadius: '18px',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    overflow: 'hidden'
+  },
+  offsetSliderFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: '100%',
+    borderRadius: '18px',
+    transition: 'all 0.15s ease'
+  },
+  offsetSliderCenter: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '2px',
+    height: '60%',
+    background: 'rgba(255,255,255,0.3)',
+    borderRadius: '1px'
+  },
+  offsetSliderInput: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    opacity: 0,
+    cursor: 'pointer'
+  },
+  offsetPresets: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '6px',
+    marginBottom: '12px'
+  },
+  offsetPresetBtn: {
+    padding: '8px 4px',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontFamily: 'monospace'
+  },
+  offsetFineTune: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: '6px'
+  },
+  fineTuneBtn: {
+    padding: '10px 4px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    fontFamily: 'monospace'
+  },
+  judgeWindowPreview: {
+    marginTop: '20px',
+    paddingTop: '16px',
+    borderTop: '1px solid rgba(255,255,255,0.08)'
+  },
+  judgeWindowLabel: {
+    display: 'block',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '2px',
+    marginBottom: '12px',
+    textAlign: 'center'
+  },
+  judgeWindowTrack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  },
+  judgeWindowRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  judgeWindowName: {
+    fontSize: '11px',
+    fontWeight: 700,
+    minWidth: '55px'
+  },
+  judgeWindowBar: {
+    flex: 1,
+    height: '20px',
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: '10px',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  judgeWindowFill: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    height: '70%',
+    borderRadius: '8px',
+    transition: 'transform 0.2s ease'
+  },
+  judgeWindowCenter: {
+    position: 'absolute',
+    top: 0,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '2px',
+    height: '100%',
+    background: 'rgba(255,255,255,0.2)',
+    zIndex: 1
+  },
+  judgeWindowMs: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    fontFamily: 'monospace',
+    minWidth: '50px',
+    textAlign: 'right'
+  },
+  offsetInfo: {
+    display: 'grid',
+    gridTemplateColumns: '1fr',
+    gap: '10px'
+  },
+  offsetInfoItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '10px',
+    padding: '12px 16px'
+  },
+  offsetInfoLabel: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '1px'
+  },
+  offsetInfoValue: {
+    fontSize: '18px',
+    fontWeight: 800,
+    fontFamily: 'monospace'
+  },
+  offsetInfoTip: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'right',
+    maxWidth: '200px'
+  },
+  applySaveBtn: {
+    width: '100%',
+    padding: '14px',
+    background: 'linear-gradient(135deg, #ffcc00, #ff9900)',
+    border: 'none',
+    borderRadius: '10px',
+    color: '#332200',
+    fontSize: '14px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 4px 20px rgba(255,204,0,0.3)'
   }
 }

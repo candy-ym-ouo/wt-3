@@ -557,6 +557,42 @@ export default function Result({
           />
         </div>
 
+        {(result.judgmentOffsetMs !== undefined && result.judgmentOffsetMs !== null) && (
+          <div style={{
+            ...styles.judgmentOffsetSection,
+            opacity: showDetails ? 1 : 0,
+            transform: showDetails ? 'translateY(0)' : 'translateY(20px)'
+          }}>
+            <div style={styles.judgmentOffsetHeader}>
+              <span style={styles.judgmentOffsetIcon}>🎯</span>
+              <span style={styles.judgmentOffsetTitle}>判定偏移</span>
+            </div>
+            <div style={styles.judgmentOffsetBody}>
+              <div style={styles.judgmentOffsetValueRow}>
+                <span style={styles.judgmentOffsetLabel}>本次使用</span>
+                <span style={{
+                  ...styles.judgmentOffsetValue,
+                  color: result.judgmentOffsetMs === 0 ? 'rgba(255,255,255,0.5)' : result.judgmentOffsetMs > 0 ? '#00ffcc' : '#ffcc00'
+                }}>
+                  {result.judgmentOffsetMs > 0 ? '+' : ''}{result.judgmentOffsetMs}ms
+                </span>
+              </div>
+              <div style={styles.judgmentOffsetInfo}>
+                <span style={styles.judgmentOffsetTip}>
+                  {result.judgmentOffsetMs < -20 ? '判定窗口大幅前移' :
+                   result.judgmentOffsetMs < -10 ? '判定窗口前移' :
+                   result.judgmentOffsetMs > 20 ? '判定窗口大幅后移' :
+                   result.judgmentOffsetMs > 10 ? '判定窗口后移' :
+                   '判定窗口居中'}
+                </span>
+                <span style={styles.judgmentOffsetAdvice}>
+                  {result.judgmentOffsetMs !== 0 ? '可以在设置页统一管理偏移设置' : '无需调整'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {bestRecord && (
           <div style={{
             ...styles.compareSection,
@@ -1614,6 +1650,64 @@ const styles = {
     gap: '12px',
     marginBottom: '24px',
     transition: 'all 0.5s ease-out'
+  },
+  judgmentOffsetSection: {
+    marginBottom: '24px',
+    padding: '20px',
+    background: 'linear-gradient(135deg, rgba(255,102,204,0.05), rgba(255,51,102,0.03))',
+    border: '1px solid rgba(255,102,204,0.15)',
+    borderRadius: '12px',
+    transition: 'all 0.5s ease-out'
+  },
+  judgmentOffsetHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '16px'
+  },
+  judgmentOffsetIcon: {
+    fontSize: '18px'
+  },
+  judgmentOffsetTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: '2px'
+  },
+  judgmentOffsetBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  judgmentOffsetValueRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  judgmentOffsetLabel: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '1px'
+  },
+  judgmentOffsetValue: {
+    fontSize: '28px',
+    fontWeight: 800,
+    fontFamily: 'monospace'
+  },
+  judgmentOffsetInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: '12px',
+    borderTop: '1px solid rgba(255,255,255,0.06)'
+  },
+  judgmentOffsetTip: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  judgmentOffsetAdvice: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)'
   },
   compareSection: {
     marginBottom: '24px',
