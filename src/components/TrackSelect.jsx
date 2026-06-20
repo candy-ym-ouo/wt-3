@@ -1130,6 +1130,10 @@ export default function TrackSelect({
               </div>
             )}
 
+            <div style={styles.heatmapContainer}>
+              <RhythmHeatmap track={getPlayableTrack() || track} />
+            </div>
+
             <div style={styles.waveformContainer}>
               <WaveformPreview track={getPlayableTrack() || track} />
             </div>
@@ -1273,6 +1277,228 @@ function WaveformPreview({ track }) {
   }, [track])
 
   return <canvas ref={canvasRef} style={styles.waveformCanvas} />
+}
+
+function RhythmHeatmap({ track }) {
+  const canvasRef = useRef(null)
+  const animRef = useRef(null)
+  const timeRef = useRef(0)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const resize = () => {
+      canvas.width = canvas.offsetWidth * 2
+      canvas.height = canvas.offsetHeight * 2
+    }
+    resize()
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(canvas)
+
+    return () => {
+      resizeObserver.disconnect()
+      cancelAnimationFrame(animRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !track) return
+    const ctx = canvas.getContext('2d')
+
+    const draw = () => {
+      timeRef.current += 0.015
+      const t = timeRef.current
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      ctx.scale(2, 2)
+      ctx.clearRect(0, 0, w, h)
+
+      const notes = track.notes || []
+      const duration = track.duration || 60
+      const laneCount = 4
+      const segmentCount = 64
+      const segmentDuration = duration / segmentCount
+
+      const densityData = []
+      let maxDensity = 0
+      let peakSegments = []
+
+      for (let s = 0; s < segmentCount; s++) {
+        const segStart = s * segmentDuration
+        const segEnd = segStart + segmentDuration
+        const segNotes = notes.filter(n => n.time >= segStart && n.time < segEnd)
+        const laneDensity = [0, 0, 0, 0]
+        segNotes.forEach(n => { laneDensity[n.lane]++ })
+        const totalDensity = laneDensity.reduce((a, b) => a + b, 0)
+        densityData.push({ segStart, segEnd, laneDensity, totalDensity })
+        if (totalDensity > maxDensity) maxDensity = totalDensity
+      }
+
+      const peakThreshold = maxDensity * 0.7
+      densityData.forEach((d, i) => {
+        if (d.totalDensity >= peakThreshold) peakSegments.push(i)
+      })
+
+      const topPadding = 30
+      const bottomPadding = 30
+      const leftPadding = 50
+      const rightPadding = 20
+      const chartW = w - leftPadding - rightPadding
+      const chartH = h - topPadding - bottomPadding
+      const laneH = chartH / laneCount
+      const segW = chartW / segmentCount
+
+      const heatGradient = (intensity) => {
+        const t = Math.min(1, intensity)
+        if (t < 0.2) return `rgba(50, 50, 80, ${0.15 + t * 0.5})`
+        if (t < 0.4) return `rgba(0, 153, 255, ${0.2 + t * 0.6})`
+        if (t < 0.6) return `rgba(0, 255, 204, ${0.3 + t * 0.5})`
+        if (t < 0.8) return `rgba(255, 204, 0, ${0.4 + t * 0.4})`
+        return `rgba(255, 51, 102, ${0.5 + t * 0.5})`
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.03)'
+      ctx.fillRect(leftPadding, topPadding, chartW, chartH)
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+      ctx.lineWidth = 1
+      for (let i = 0; i <= laneCount; i++) {
+        const y = topPadding + laneH * i
+        ctx.beginPath()
+        ctx.moveTo(leftPadding, y)
+        ctx.lineTo(leftPadding + chartW, y)
+        ctx.stroke()
+      }
+
+      for (let i = 0; i <= 8; i++) {
+        const x = leftPadding + (chartW / 8) * i
+        ctx.beginPath()
+        ctx.moveTo(x, topPadding)
+        ctx.lineTo(x, topPadding + chartH)
+        ctx.strokeStyle = i % 2 === 0 ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)'
+        ctx.stroke()
+      }
+
+      const laneColors = ['#ff3366', '#ffcc00', '#00ffcc', '#6699ff']
+      densityData.forEach((seg, sIdx) => {
+        const x = leftPadding + segW * sIdx
+        for (let lane = 0; lane < laneCount; lane++) {
+          const y = topPadding + laneH * (laneCount - 1 - lane)
+          const intensity = maxDensity > 0 ? seg.laneDensity[lane] / (maxDensity / laneCount) : 0
+          if (intensity > 0.05) {
+            ctx.fillStyle = heatGradient(intensity)
+            const barH = Math.max(2, laneH * Math.min(1, intensity * 0.9))
+            ctx.fillRect(x + 1, y + (laneH - barH) / 2, Math.max(2, segW - 2), barH)
+          }
+        }
+      })
+
+      for (let lane = 0; lane < laneCount; lane++) {
+        const y = topPadding + laneH * (laneCount - 1 - lane)
+        ctx.strokeStyle = laneColors[lane] + '33'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(leftPadding, y + laneH / 2)
+        ctx.lineTo(leftPadding + chartW, y + laneH / 2)
+        ctx.stroke()
+      }
+
+      const avgDensity = densityData.reduce((a, b) => a + b.totalDensity, 0) / segmentCount
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      for (let s = 0; s < segmentCount; s++) {
+        const x = leftPadding + segW * (s + 0.5)
+        const intensity = maxDensity > 0 ? densityData[s].totalDensity / maxDensity : 0
+        const y = topPadding + chartH * (1 - intensity * 0.9) - 5
+        if (s === 0) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+      }
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      peakSegments.forEach(sIdx => {
+        const x = leftPadding + segW * sIdx
+        const pulse = 0.5 + Math.sin(t * 2 + sIdx * 0.3) * 0.3
+        ctx.fillStyle = `rgba(255, 51, 102, ${0.08 * pulse})`
+        ctx.fillRect(x, topPadding, segW, chartH)
+
+        const intensity = maxDensity > 0 ? densityData[sIdx].totalDensity / maxDensity : 0
+        if (intensity > 0.85) {
+          ctx.strokeStyle = `rgba(255, 100, 100, ${0.4 + pulse * 0.3})`
+          ctx.lineWidth = 2
+          ctx.strokeRect(x + 1, topPadding + 1, segW - 2, chartH - 2)
+        }
+      })
+
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.font = '10px monospace'
+      ctx.textAlign = 'right'
+      for (let lane = 0; lane < laneCount; lane++) {
+        const y = topPadding + laneH * (laneCount - 1 - lane) + laneH / 2 + 4
+        ctx.fillStyle = laneColors[lane] + 'aa'
+        ctx.fillText(`L${lane + 1}`, leftPadding - 8, y)
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ctx.font = '9px monospace'
+      ctx.textAlign = 'center'
+      for (let i = 0; i <= 8; i++) {
+        const x = leftPadding + (chartW / 8) * i
+        const timeSec = Math.round((duration / 8) * i)
+        const min = Math.floor(timeSec / 60)
+        const sec = timeSec % 60
+        ctx.fillText(`${min}:${sec.toString().padStart(2, '0')}`, x, topPadding + chartH + 16)
+      }
+
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText('🎯 节奏密度分布', leftPadding, topPadding - 12)
+
+      ctx.textAlign = 'right'
+      ctx.font = '9px sans-serif'
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.fillText(
+        `峰值: ${maxDensity} 音符/段 · 均值: ${avgDensity.toFixed(1)} · 难点段: ${peakSegments.length}`,
+        leftPadding + chartW,
+        topPadding - 12
+      )
+
+      const legendX = leftPadding + chartW - 180
+      const legendY = topPadding + chartH + 6
+      const legendW = 170
+      const legendH = 8
+      for (let i = 0; i < legendW; i++) {
+        ctx.fillStyle = heatGradient(i / legendW)
+        ctx.fillRect(legendX + i, legendY, 1, legendH)
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)'
+      ctx.lineWidth = 1
+      ctx.strokeRect(legendX, legendY, legendW, legendH)
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'
+      ctx.font = '8px sans-serif'
+      ctx.textAlign = 'left'
+      ctx.fillText('低', legendX - 12, legendY + 7)
+      ctx.textAlign = 'right'
+      ctx.fillText('高', legendX + legendW + 12, legendY + 7)
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      animRef.current = requestAnimationFrame(draw)
+    }
+    draw()
+
+    return () => cancelAnimationFrame(animRef.current)
+  }, [track])
+
+  return (
+    <div style={styles.heatmapWrapper}>
+      <canvas ref={canvasRef} style={styles.heatmapCanvas} />
+    </div>
+  )
 }
 
 function KeyTracker({ mousePos, colors, labels }) {
@@ -2046,6 +2272,25 @@ const styles = {
     borderRadius: '4px',
     fontSize: '11px',
     color: 'rgba(255,255,255,0.5)'
+  },
+  heatmapContainer: {
+    height: '200px',
+    background: 'linear-gradient(135deg, rgba(0,0,0,0.4), rgba(20,10,30,0.4))',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    marginBottom: '14px',
+    overflow: 'hidden',
+    padding: '8px 10px'
+  },
+  heatmapWrapper: {
+    width: '100%',
+    height: '100%',
+    position: 'relative'
+  },
+  heatmapCanvas: {
+    width: '100%',
+    height: '100%',
+    display: 'block'
   },
   waveformContainer: {
     height: '140px',
