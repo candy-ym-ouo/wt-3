@@ -24,6 +24,7 @@ import { useStoryStore } from './store/useStoryStore.js'
 import { useKeyPresetStore } from './store/useKeyPresetStore.js'
 import { getConstraintModifiers } from './data/dailyChallengeData.js'
 import { getChapterById, getStagesByChapter, getStageById } from './data/storyData.js'
+import { generateMissions, getMissionsSummary } from './data/missionData.js'
 import CalibrationCenter from './components/CalibrationCenter.jsx'
 import ThemeWorkshop from './components/ThemeWorkshop.jsx'
 
@@ -54,6 +55,8 @@ export default function App() {
   const [storyResultData, setStoryResultData] = useState(null)
   const [showStoryResult, setShowStoryResult] = useState(false)
   const [showImporter, setShowImporter] = useState(false)
+  const [currentMissions, setCurrentMissions] = useState(null)
+  const [missionResult, setMissionResult] = useState(null)
 
   const calibrationStore = useCalibrationStore()
   const storyStore = useStoryStore()
@@ -102,6 +105,9 @@ export default function App() {
 
   const handleSelectTrack = (track) => {
     clearTutorialState()
+    const missions = generateMissions(track, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
     setSelectedTrack(track)
     setScreen('game')
   }
@@ -118,6 +124,9 @@ export default function App() {
     if (!trackWithDiff) return
     const modifiers = getConstraintModifiers(challenge.constraints)
     clearTutorialState()
+    const missions = generateMissions(trackWithDiff, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
     setSelectedTrack(trackWithDiff)
     setIsDailyChallengeMode(true)
     setDailyChallengeModifiers(modifiers)
@@ -129,6 +138,9 @@ export default function App() {
   const handleStartStoryStage = useCallback((stage, track) => {
     if (!stage || !track) return
     storyStore.startStage(stage.id)
+    const missions = generateMissions(track, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
     setCurrentStoryStage(stage)
     setSelectedTrack(track)
     setIsStoryMode(true)
@@ -142,6 +154,9 @@ export default function App() {
     if (!currentStoryStage) return
     const track = getTrackWithDifficulty(currentStoryStage.trackId, currentStoryStage.difficultyId)
     if (!track) return
+    const missions = generateMissions(track, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
     setSelectedTrack(track)
     setShowStoryResult(false)
     setStoryResultData(null)
@@ -183,7 +198,14 @@ export default function App() {
     storyStore.clearStoryResult()
   }, [storyStore])
 
-  const handleGameEnd = (result) => {
+  const handleGameEnd = (result, missionsResult) => {
+    if (missionsResult) {
+      setMissionResult(missionsResult)
+      const missionSummary = getMissionsSummary(missionsResult)
+      if (missionSummary.bonusExp > 0) {
+        playerStore.addBonusExp(missionSummary.bonusExp)
+      }
+    }
     const growthResult = playerStore.processGameResult(result, selectedTrack)
     setGrowthInfo({
       gainedExp: growthResult.gainedExp,
@@ -274,6 +296,9 @@ export default function App() {
 
   const handlePlayFromEditor = (track) => {
     clearTutorialState()
+    const missions = generateMissions(track, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
     setSelectedTrack(track)
     setScreen('game')
   }
@@ -287,6 +312,8 @@ export default function App() {
 
   const handleStartPractice = (section) => {
     clearTutorialState()
+    setCurrentMissions(null)
+    setMissionResult(null)
     setPracticeSection(section)
     setScreen('game')
   }
@@ -417,6 +444,7 @@ export default function App() {
           isDailyChallengeMode={isDailyChallengeMode}
           dailyChallengeModifiers={dailyChallengeModifiers}
           theme={themeStore.theme}
+          missions={currentMissions}
         />
       )}
       {screen === 'result' && gameResult && (
@@ -427,6 +455,9 @@ export default function App() {
             if (!selectedTrack?.isTutorial) {
               clearTutorialState()
             }
+            const missions = generateMissions(selectedTrack, 3)
+            setCurrentMissions(missions)
+            setMissionResult(null)
             setScreen('game')
           }}
           onBack={() => {
@@ -457,6 +488,7 @@ export default function App() {
           trackAllLeaderboards={playerStore.getTrackAllLeaderboards(selectedTrack.id)}
           allDifficultyLeaderboards={playerStore.getAllDifficultyLeaderboards()}
           overallDifficultyStats={playerStore.getOverallDifficultyStats()}
+          missionResult={missionResult}
         />
       )}
       {showGrowthCenter && (

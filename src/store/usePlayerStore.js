@@ -1381,6 +1381,40 @@ export function usePlayerStore() {
     }
   }, [playerData.unlockedBadges])
 
+  const addBonusExp = useCallback((exp) => {
+    if (exp <= 0) return
+
+    setPlayerData(prev => {
+      let newExp = prev.exp + exp
+      let newTotalExp = prev.totalExp + exp
+      let newLevel = prev.level
+      const newLevelUps = []
+
+      while (newLevel < LEVEL_CURVE.length - 1 && newExp >= LEVEL_CURVE[newLevel]) {
+        newExp -= LEVEL_CURVE[newLevel]
+        newLevel += 1
+        newLevelUps.push(newLevel)
+      }
+
+      const updated = {
+        ...prev,
+        exp: newExp,
+        totalExp: newTotalExp,
+        level: newLevel
+      }
+
+      if (newLevelUps.length > 0) {
+        setNewlyUnlocked(prevUnlocked => ({
+          ...prevUnlocked,
+          levelUps: [...prevUnlocked.levelUps, ...newLevelUps]
+        }))
+      }
+
+      saveToStorage(STORAGE_KEY, updated)
+      return updated
+    })
+  }, [])
+
   return {
     playerData,
     expToNextLevel,
@@ -1428,6 +1462,7 @@ export function usePlayerStore() {
     getEventAchievements,
     getActiveMultiplier,
     getBadgeStats,
-    checkBadges
+    checkBadges,
+    addBonusExp
   }
 }

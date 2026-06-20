@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { RANK_COLORS, TIER_GRADES, TIER_COLORS, TIER_NAMES, getTierInfo } from '../data/growthData.js'
 import {
   DIFFICULTIES,
@@ -7,6 +7,7 @@ import {
   normalizeDifficultyId,
   sortDifficulties
 } from '../data/tracks.js'
+import { getMissionsSummary, getMissionProgressText } from '../data/missionData.js'
 
 const LEADERBOARD_TABS = [
   { id: 'track', label: '曲目榜' },
@@ -41,7 +42,8 @@ export default function Result({
   trackAllBestRecords,
   trackAllLeaderboards,
   allDifficultyLeaderboards,
-  overallDifficultyStats
+  overallDifficultyStats,
+  missionResult = null
 }) {
   const resultStyle = theme?.resultStyleId || 'neon'
   const currentDiffInfo = getDifficultyInfo(track.difficulty)
@@ -58,6 +60,7 @@ export default function Result({
   const [showGrowth, setShowGrowth] = useState(false)
   const [showRecordBanner, setShowRecordBanner] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [showMissions, setShowMissions] = useState(false)
   const [activeTab, setActiveTab] = useState('track')
   const [activeDiffTab, setActiveDiffTab] = useState(normalizeDifficultyId(track.difficulty))
   const canvasRef = useRef(null)
@@ -89,6 +92,11 @@ export default function Result({
     recordChecks.isNewBest || recordChecks.isNewAccuracy || recordChecks.isNewCombo
   )
 
+  const missionSummary = useMemo(() => {
+    if (!missionResult) return null
+    return getMissionsSummary(missionResult)
+  }, [missionResult])
+
   useEffect(() => {
     const t = setTimeout(() => animateStats(), 300)
     const t2 = setTimeout(() => setShowRank(true), 1200)
@@ -98,6 +106,9 @@ export default function Result({
       if (hasNewRecord) setShowRecordBanner(true)
     }, 800)
     const t6 = setTimeout(() => setShowLeaderboard(true), 3000)
+    const t7 = setTimeout(() => {
+      if (missionResult) setShowMissions(true)
+    }, 2100)
     return () => {
       clearTimeout(t)
       clearTimeout(t2)
@@ -105,8 +116,9 @@ export default function Result({
       clearTimeout(t4)
       clearTimeout(t5)
       clearTimeout(t6)
+      clearTimeout(t7)
     }
-  }, [hasNewRecord])
+  }, [hasNewRecord, missionResult])
 
   const animateStats = () => {
     const duration = 1200
@@ -530,6 +542,118 @@ export default function Result({
             health={result.health}
             showDetails={showDetails}
           />
+        )}
+
+        {missionResult && missionResult.length > 0 && (
+          <div style={{
+            ...styles.missionsSection,
+            opacity: showMissions ? 1 : 0,
+            transform: showMissions ? 'translateY(0)' : 'translateY(20px)'
+          }}>
+            <div style={styles.missionsHeader}>
+              <span style={styles.missionsIcon}>🎯</span>
+              <span style={styles.missionsTitle}>局内任务</span>
+              {missionSummary && (
+                <span style={{
+                  ...styles.missionsSummary,
+                  color: missionSummary.allCompleted
+                    ? '#00ffcc'
+                    : missionSummary.anyFailed
+                    ? '#ff3366'
+                    : '#ffcc00'
+                }}>
+                  {missionSummary.completed}/{missionSummary.total} 完成
+                  {missionSummary.bonusExp > 0 && (
+                    <span style={styles.missionsBonus}>
+                      +{missionSummary.bonusExp} EXP
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <div style={styles.missionsGrid}>
+              {missionResult.map((mission, index) => (
+                <div
+                  key={mission.id}
+                  style={{
+                    ...styles.missionCard,
+                    borderColor: mission.completed
+                      ? `${mission.color}55`
+                      : mission.failed
+                      ? 'rgba(255,51,102,0.3)'
+                      : 'rgba(255,255,255,0.1)',
+                    background: mission.completed
+                      ? `linear-gradient(135deg, ${mission.color}18, transparent)`
+                      : mission.failed
+                      ? 'linear-gradient(135deg, rgba(255,51,102,0.1), transparent)'
+                      : 'rgba(255,255,255,0.02)'
+                  }}
+                >
+                  <div style={styles.missionCardHeader}>
+                    <span style={{
+                      ...styles.missionCardIcon,
+                      background: `${mission.color}22`,
+                      color: mission.color
+                    }}>
+                      {mission.completed ? '✓' : mission.failed ? '✕' : mission.icon}
+                    </span>
+                    <div style={styles.missionCardInfo}>
+                      <div style={{
+                        ...styles.missionCardName,
+                        color: mission.completed
+                          ? mission.color
+                          : mission.failed
+                          ? 'rgba(255,51,102,0.6)'
+                          : '#fff'
+                      }}>
+                        {mission.name}
+                      </div>
+                      <div style={styles.missionCardDesc}>
+                        {mission.description}
+                      </div>
+                    </div>
+                    <div style={{
+                      ...styles.missionCardStatus,
+                      color: mission.completed
+                        ? mission.color
+                        : mission.failed
+                        ? 'rgba(255,51,102,0.6)'
+                        : 'rgba(255,255,255,0.5)'
+                    }}>
+                      {getMissionProgressText(mission)}
+                    </div>
+                  </div>
+
+                  {mission.bonusExp > 0 && (
+                    <div style={styles.missionCardBonus}>
+                      {mission.completed ? (
+                        <span style={{ ...styles.missionBonusText, color: '#ffcc00' }}>
+                          +{mission.bonusExp} EXP 已获得
+                        </span>
+                      ) : (
+                        <span style={styles.missionBonusText}>
+                          奖励: +{mission.bonusExp} EXP
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {missionSummary && missionSummary.allCompleted && (
+              <div style={styles.allMissionsCompleteBanner}>
+                <span style={styles.allCompleteIcon}>🏆</span>
+                <span style={styles.allCompleteText}>
+                  太棒了！全部任务完成！
+                </span>
+                <span style={styles.allCompleteBonus}>
+                  +{missionSummary.bonusExp} EXP
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         <div style={{
@@ -3387,6 +3511,131 @@ const styles = {
     fontSize: '10px',
     color: 'rgba(255,255,255,0.4)',
     letterSpacing: '1px'
+  },
+  missionsSection: {
+    marginTop: '20px',
+    padding: '20px',
+    background: 'rgba(10,10,20,0.5)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '16px',
+    transition: 'all 0.4s ease-out'
+  },
+  missionsHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '16px'
+  },
+  missionsIcon: {
+    fontSize: '20px'
+  },
+  missionsTitle: {
+    fontSize: '16px',
+    fontWeight: 800,
+    color: '#fff',
+    letterSpacing: '2px',
+    flex: 1
+  },
+  missionsSummary: {
+    fontSize: '13px',
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  missionsBonus: {
+    marginLeft: '8px',
+    padding: '3px 8px',
+    background: 'rgba(255,204,0,0.15)',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#ffcc00'
+  },
+  missionsGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  missionCard: {
+    padding: '14px 16px',
+    borderRadius: '12px',
+    border: '1px solid',
+    transition: 'all 0.3s ease'
+  },
+  missionCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  missionCardIcon: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '10px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '18px',
+    fontWeight: 800,
+    flexShrink: 0
+  },
+  missionCardInfo: {
+    flex: 1,
+    minWidth: 0
+  },
+  missionCardName: {
+    fontSize: '14px',
+    fontWeight: 700,
+    marginBottom: '2px'
+  },
+  missionCardDesc: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.4)'
+  },
+  missionCardStatus: {
+    fontSize: '12px',
+    fontWeight: 700,
+    fontFamily: 'monospace',
+    flexShrink: 0
+  },
+  missionCardBonus: {
+    marginTop: '10px',
+    paddingTop: '10px',
+    borderTop: '1px solid rgba(255,255,255,0.06)'
+  },
+  missionBonusText: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.5)'
+  },
+  allMissionsCompleteBanner: {
+    marginTop: '16px',
+    padding: '14px 20px',
+    background: 'linear-gradient(135deg, rgba(0,255,204,0.15), rgba(255,204,0,0.1))',
+    border: '1px solid rgba(0,255,204,0.3)',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px'
+  },
+  allCompleteIcon: {
+    fontSize: '24px'
+  },
+  allCompleteText: {
+    fontSize: '15px',
+    fontWeight: 800,
+    color: '#00ffcc',
+    letterSpacing: '1px'
+  },
+  allCompleteBonus: {
+    padding: '4px 10px',
+    background: 'rgba(255,204,0,0.2)',
+    border: '1px solid rgba(255,204,0,0.4)',
+    borderRadius: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#ffcc00'
   }
 }
 

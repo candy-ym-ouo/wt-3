@@ -6,6 +6,7 @@ import PauseMenu from './PauseMenu.jsx'
 import { usePracticeStore } from '../store/usePracticeStore.js'
 import { useCalibrationStore } from '../store/useCalibrationStore.js'
 import { calculateTierGrade, getTierBreakdown } from '../data/growthData.js'
+import { initializeMissionTracker, updateMissionProgress, finalizeMissions } from '../data/missionData.js'
 
 const JUDGE_WINDOWS = {
   perfect: 0.05,
@@ -28,7 +29,7 @@ const JUDGE_RANK = {
   miss: 1
 }
 
-export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, isDailyChallengeMode = false, dailyChallengeModifiers = null, theme }) {
+export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, isDailyChallengeMode = false, dailyChallengeModifiers = null, theme, missions = null }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
   const calibrationStore = useCalibrationStore()
@@ -117,6 +118,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
   const replayQueueRef = useRef([])
   const currentSectionRef = useRef(null)
   const loopCountRef = useRef(0)
+  const missionTrackerRef = useRef(null)
+  const [missionTracker, setMissionTracker] = useState(null)
+  const [missionToast, setMissionToast] = useState(null)
 
   const beat = 60 / track.bpm
   const barDuration = beat * 4
@@ -533,8 +537,39 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
     playHitSound(judgeType)
 
+    if (missionTrackerRef.current && !isPracticeMode && !isTutorialMode) {
+      const oldCompleted = missionTrackerRef.current.filter(m => m.completed).map(m => m.id)
+      missionTrackerRef.current = updateMissionProgress(
+        missionTrackerRef.current,
+        judgeType,
+        lane,
+        comboRef.current,
+        statsRef.current,
+        getFilteredNotes().length
+      )
+      const newCompleted = missionTrackerRef.current.filter(m => m.completed && !oldCompleted.includes(m.id))
+      if (newCompleted.length > 0) {
+        setMissionToast({
+          type: 'complete',
+          mission: newCompleted[0],
+          id: Date.now()
+        })
+        setTimeout(() => setMissionToast(null), 2000)
+      }
+      const newFailed = missionTrackerRef.current.filter(m => m.failed && !oldCompleted.includes(m.id) && m.failed)
+      if (newFailed.length > 0) {
+        setMissionToast({
+          type: 'fail',
+          mission: newFailed[0],
+          id: Date.now()
+        })
+        setTimeout(() => setMissionToast(null), 2000)
+      }
+      setMissionTracker([...missionTrackerRef.current])
+    }
+
     return judgeType
-  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, tutorialJudgeMultiplier])
+  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, tutorialJudgeMultiplier, getFilteredNotes, isPracticeMode, isTutorialMode])
 
   const getFilteredNotes = useCallback(() => {
     const range = practiceRange()
@@ -562,6 +597,15 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     else if (accuracy >= 90) rank = 'A'
     else if (accuracy >= 80) rank = 'B'
     else if (accuracy >= 70) rank = 'C'
+
+    let finalMissions = null
+    if (missionTrackerRef.current && !isPracticeMode && !isTutorialMode) {
+      finalMissions = finalizeMissions(
+        missionTrackerRef.current,
+        finalStats,
+        totalNotes
+      )
+    }
 
     const replayData = {
       id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -624,9 +668,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     }
 
     setTimeout(() => {
-      onEnd(result)
+      onEnd(result, finalMissions)
     }, 300)
-  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track, applyAndSaveOffset, initialJudgmentOffsetMs])
+  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track, applyAndSaveOffset, initialJudgmentOffsetMs, isTutorialMode])
 
   const jumpToSection = useCallback((startBar, endBar) => {
     const startTime = startBar * barDuration
@@ -714,6 +758,14 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       hasStartedRef.current = true
       replayQueueRef.current = []
       loopCountRef.current = 0
+
+      if (missions && !isPracticeMode && !isTutorialMode) {
+        missionTrackerRef.current = initializeMissionTracker(missions)
+        setMissionTracker(missionTrackerRef.current)
+      } else {
+        missionTrackerRef.current = null
+        setMissionTracker(null)
+      }
 
       replayDataRef.current = {
         keyEvents: [],
@@ -923,6 +975,28 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             })
 
             playHitSound('miss')
+
+            if (missionTrackerRef.current && !isPracticeMode && !isTutorialMode) {
+              const oldCompleted = missionTrackerRef.current.filter(m => m.completed).map(m => m.id)
+              missionTrackerRef.current = updateMissionProgress(
+                missionTrackerRef.current,
+                'miss',
+                note.lane,
+                comboRef.current,
+                statsRef.current,
+                getFilteredNotes().length
+              )
+              const newFailed = missionTrackerRef.current.filter(m => m.failed && !oldCompleted.includes(m.id))
+              if (newFailed.length > 0) {
+                setMissionToast({
+                  type: 'fail',
+                  mission: newFailed[0],
+                  id: Date.now()
+                })
+                setTimeout(() => setMissionToast(null), 2000)
+              }
+              setMissionTracker([...missionTrackerRef.current])
+            }
           }
         })
 
@@ -1155,6 +1229,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         trackTitle={track.title}
         judgeFeedback={judgeFeedback}
         totalNotes={getFilteredNotes().length}
+        missions={missionTracker}
       />
 
       {isPracticeMode && (
@@ -1209,6 +1284,39 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
           )}
           {!dailyChallengeModifiers?.allowMiss && (
             <span style={styles.dailyChallengeConstraintBadge}>💎 零失误</span>
+          )}
+        </div>
+      )}
+
+      {missionToast && (
+        <div
+          key={missionToast.id}
+          style={{
+            ...styles.missionToast,
+            background: missionToast.type === 'complete'
+              ? 'linear-gradient(135deg, rgba(0,255,204,0.25), rgba(0,204,170,0.15))'
+              : 'linear-gradient(135deg, rgba(255,51,102,0.25), rgba(204,34,85,0.15))',
+            borderColor: missionToast.type === 'complete' ? 'rgba(0,255,204,0.5)' : 'rgba(255,51,102,0.5)'
+          }}
+        >
+          <span style={styles.missionToastIcon}>
+            {missionToast.type === 'complete' ? '🎉' : '😢'}
+          </span>
+          <div style={styles.missionToastContent}>
+            <div style={{
+              ...styles.missionToastTitle,
+              color: missionToast.type === 'complete' ? '#00ffcc' : '#ff3366'
+            }}>
+              {missionToast.type === 'complete' ? '任务完成！' : '任务失败'}
+            </div>
+            <div style={styles.missionToastDesc}>
+              {missionToast.mission.icon} {missionToast.mission.name}
+            </div>
+          </div>
+          {missionToast.mission.bonusExp && missionToast.type === 'complete' && (
+            <span style={styles.missionToastBonus}>
+              +{missionToast.mission.bonusExp} EXP
+            </span>
           )}
         </div>
       )}
@@ -1888,5 +1996,67 @@ const styles = {
     color: '#ffcc00',
     backdropFilter: 'blur(10px)',
     animation: 'pulse 2s ease-in-out infinite'
+  },
+  missionToast: {
+    position: 'absolute',
+    top: '80px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px 20px',
+    borderRadius: '12px',
+    border: '1px solid',
+    backdropFilter: 'blur(10px)',
+    zIndex: 25,
+    animation: 'slideDown 0.3s ease-out',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+  },
+  missionToastIcon: {
+    fontSize: '24px'
+  },
+  missionToastContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px'
+  },
+  missionToastTitle: {
+    fontSize: '14px',
+    fontWeight: 800,
+    letterSpacing: '1px'
+  },
+  missionToastDesc: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  missionToastBonus: {
+    marginLeft: '8px',
+    padding: '4px 10px',
+    background: 'rgba(255,204,0,0.2)',
+    border: '1px solid rgba(255,204,0,0.4)',
+    borderRadius: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    color: '#ffcc00'
   }
 }
+
+const styleSheet = document.createElement('style')
+styleSheet.textContent = `
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+`
+document.head.appendChild(styleSheet)

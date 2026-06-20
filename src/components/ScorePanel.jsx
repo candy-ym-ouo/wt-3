@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { calculateTierGrade, getTierInfo } from '../data/growthData.js'
+import { getMissionProgressText } from '../data/missionData.js'
 
 export default function ScorePanel({
   score,
@@ -12,7 +13,8 @@ export default function ScorePanel({
   stats,
   trackTitle,
   judgeFeedback,
-  totalNotes
+  totalNotes,
+  missions = null
 }) {
   const [displayScore, setDisplayScore] = useState(0)
   const [comboFlash, setComboFlash] = useState(false)
@@ -147,6 +149,69 @@ export default function ScorePanel({
           }}>
             <span style={styles.tierId}>{estimatedTier}</span>
             <span style={styles.tierName}>{estimatedTierInfo.name}</span>
+          </div>
+        </div>
+      )}
+
+      {missions && missions.length > 0 && (
+        <div style={styles.missionsSection}>
+          <div style={styles.missionsHeader}>
+            <span style={styles.missionsIcon}>🎯</span>
+            <span style={styles.missionsLabel}>局内任务</span>
+          </div>
+          <div style={styles.missionsList}>
+            {missions.map((mission, index) => (
+              <div
+                key={mission.id}
+                style={{
+                  ...styles.missionItem,
+                  borderColor: mission.completed
+                    ? `${mission.color}88`
+                    : mission.failed
+                    ? 'rgba(255,51,102,0.3)'
+                    : 'rgba(255,255,255,0.1)',
+                  background: mission.completed
+                    ? `${mission.color}15`
+                    : mission.failed
+                    ? 'rgba(255,51,102,0.08)'
+                    : 'rgba(0,0,0,0.3)'
+                }}
+              >
+                <div style={styles.missionItemLeft}>
+                  <span style={{
+                    ...styles.missionIcon,
+                    opacity: mission.failed ? 0.5 : 1
+                  }}>
+                    {mission.completed ? '✓' : mission.failed ? '✕' : mission.icon}
+                  </span>
+                  <div style={styles.missionInfo}>
+                    <div style={{
+                      ...styles.missionName,
+                      color: mission.completed
+                        ? mission.color
+                        : mission.failed
+                        ? 'rgba(255,51,102,0.6)'
+                        : '#fff'
+                    }}>
+                      {mission.name}
+                    </div>
+                    <div style={styles.missionDesc}>
+                      {mission.description}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  ...styles.missionProgress,
+                  color: mission.completed
+                    ? mission.color
+                    : mission.failed
+                    ? 'rgba(255,51,102,0.6)'
+                    : 'rgba(255,255,255,0.7)'
+                }}>
+                  {getMissionProgressText(mission)}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -418,6 +483,84 @@ const styles = {
     top: '52%',
     left: '32px',
     transform: 'translateY(-50%)'
+  },
+  missionsSection: {
+    position: 'absolute',
+    top: '240px',
+    right: '32px',
+    width: '240px',
+    background: 'rgba(0,0,0,0.5)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    padding: '12px',
+    backdropFilter: 'blur(10px)'
+  },
+  missionsHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '10px'
+  },
+  missionsIcon: {
+    fontSize: '14px'
+  },
+  missionsLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: '2px'
+  },
+  missionsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  },
+  missionItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+    padding: '8px 10px',
+    borderRadius: '8px',
+    border: '1px solid',
+    transition: 'all 0.3s ease'
+  },
+  missionItemLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flex: 1,
+    minWidth: 0
+  },
+  missionIcon: {
+    fontSize: '16px',
+    flexShrink: 0
+  },
+  missionInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0
+  },
+  missionName: {
+    fontSize: '12px',
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  missionDesc: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  missionProgress: {
+    fontSize: '11px',
+    fontWeight: 700,
+    fontFamily: 'monospace',
+    flexShrink: 0
   }
 }
 
