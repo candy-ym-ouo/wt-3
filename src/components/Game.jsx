@@ -72,7 +72,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     particles: [],
     ringPulses: [],
     lanePressed: [false, false, false, false],
-    currentTime: 0
+    currentTime: 0,
+    bgPulses: [],
+    laneFlashes: [],
+    hitFeedbacks: []
   })
 
   const replayDataRef = useRef({
@@ -483,26 +486,49 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       y: 1
     })
 
+    data.bgPulses.push({
+      type: judgeType,
+      time: timeNow,
+      intensity: judgeType === 'perfect' ? 1.0 : judgeType === 'great' ? 0.7 : judgeType === 'good' ? 0.4 : 0.2
+    })
+
+    data.laneFlashes.push({
+      lane,
+      type: judgeType,
+      time: timeNow
+    })
+
     const particleCount = judgeType === 'perfect' ? 20 : judgeType === 'great' ? 12 : judgeType === 'good' ? 6 : 3
     for (let p = 0; p < particleCount; p++) {
       const angle = (p / particleCount) * Math.PI * 2 + Math.random() * 0.3
-      const speed = 2 + Math.random() * 5
+      const baseSpeed = judgeType === 'perfect' ? 5 : judgeType === 'great' ? 3.5 : judgeType === 'good' ? 2 : 1
+      const speed = baseSpeed + Math.random() * (judgeType === 'perfect' ? 4 : judgeType === 'great' ? 3 : 2)
+      const tier = judgeType === 'perfect' ? 3 : judgeType === 'great' ? 2 : judgeType === 'good' ? 1 : 0
       data.particles.push({
         x: 0.5 + (lane - 1.5) * 0.12,
         y: 0.82,
         vx: Math.cos(angle) * speed * 0.01,
-        vy: Math.sin(angle) * speed * 0.01 - 0.02,
+        vy: Math.sin(angle) * speed * 0.01 - (tier >= 2 ? 0.03 : 0.02),
         life: 1,
         color: keyConfig.colors[lane],
-        size: 2 + Math.random() * 3
+        size: (tier === 3 ? 4 : tier === 2 ? 3 : tier === 1 ? 2.5 : 2) + Math.random() * (tier >= 2 ? 3 : 2),
+        tier,
+        trail: tier >= 2
       })
     }
+
+    data.hitFeedbacks.push({
+      lane,
+      type: judgeType,
+      time: timeNow
+    })
 
     data.ringPulses.push({
       lane,
       time: timeNow,
       radius: 0.05,
-      color: keyConfig.colors[lane]
+      color: keyConfig.colors[lane],
+      tier: judgeType === 'perfect' ? 3 : judgeType === 'great' ? 2 : judgeType === 'good' ? 1 : 0
     })
 
     playHitSound(judgeType)
@@ -621,6 +647,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     gameDataRef.current.hitEffects = []
     gameDataRef.current.particles = []
     gameDataRef.current.ringPulses = []
+    gameDataRef.current.bgPulses = []
+    gameDataRef.current.laneFlashes = []
+    gameDataRef.current.hitFeedbacks = []
 
     currentSectionRef.current = { startBar, endBar, startTime, endTime }
   }, [barDuration, getFilteredNotes])
@@ -664,6 +693,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       gameDataRef.current.hitEffects = []
       gameDataRef.current.particles = []
       gameDataRef.current.ringPulses = []
+      gameDataRef.current.bgPulses = []
+      gameDataRef.current.laneFlashes = []
+      gameDataRef.current.hitFeedbacks = []
       gameDataRef.current.currentTime = range.start
 
       currentSectionRef.current = {
@@ -763,6 +795,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             gameDataRef.current.hitEffects = []
             gameDataRef.current.particles = []
             gameDataRef.current.ringPulses = []
+            gameDataRef.current.bgPulses = []
+            gameDataRef.current.laneFlashes = []
+            gameDataRef.current.hitFeedbacks = []
 
             try {
               Tone.Transport.cancel()
@@ -845,6 +880,48 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
               y: 1
             })
 
+            activeData.bgPulses.push({
+              type: 'miss',
+              time: now,
+              intensity: 0.2
+            })
+
+            activeData.laneFlashes.push({
+              lane: note.lane,
+              type: 'miss',
+              time: now
+            })
+
+            for (let p = 0; p < 3; p++) {
+              const angle = (p / 3) * Math.PI * 2 + Math.random() * 0.3
+              const speed = 1 + Math.random() * 2
+              activeData.particles.push({
+                x: 0.5 + (note.lane - 1.5) * 0.12,
+                y: 0.82,
+                vx: Math.cos(angle) * speed * 0.01,
+                vy: Math.sin(angle) * speed * 0.01 - 0.02,
+                life: 1,
+                color: keyConfig.colors[note.lane],
+                size: 2 + Math.random() * 2,
+                tier: 0,
+                trail: false
+              })
+            }
+
+            activeData.hitFeedbacks.push({
+              lane: note.lane,
+              type: 'miss',
+              time: now
+            })
+
+            activeData.ringPulses.push({
+              lane: note.lane,
+              time: now,
+              radius: 0.05,
+              color: keyConfig.colors[note.lane],
+              tier: 0
+            })
+
             playHitSound('miss')
           }
         })
@@ -860,6 +937,18 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         activeData.ringPulses = activeData.ringPulses.filter(r => {
           r.radius += 0.02
           return r.radius < 0.25
+        })
+
+        activeData.bgPulses = activeData.bgPulses.filter(bp => {
+          return (now - bp.time) < 0.8
+        })
+
+        activeData.laneFlashes = activeData.laneFlashes.filter(lf => {
+          return (now - lf.time) < 0.5
+        })
+
+        activeData.hitFeedbacks = activeData.hitFeedbacks.filter(hf => {
+          return (now - hf.time) < 0.6
         })
 
         if (healthRef.current <= 0 && !gameEndedRef.current && !isPracticeMode) {

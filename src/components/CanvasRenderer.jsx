@@ -302,6 +302,58 @@ export default function CanvasRenderer({
         case 'retro': drawBackgroundRetro(t, waveData); break
         default: drawBackgroundNebula(t, waveData); break
       }
+      drawBackgroundPulse(t, time)
+    }
+
+    const drawBackgroundPulse = (t, time) => {
+      const cx = width / 2
+      const cy = height / 2
+
+      gameDataRef.current.bgPulses.forEach(bp => {
+        const age = time - bp.time
+        if (age > 0.8) return
+        const progress = age / 0.8
+        const alpha = (1 - progress) * bp.intensity * 0.35
+
+        const judgeColors = {
+          perfect: '#ffcc00',
+          great: '#00ffcc',
+          good: '#6699ff',
+          miss: '#ff3366'
+        }
+        const color = judgeColors[bp.type] || '#ffffff'
+
+        const pulseLayers = bp.intensity >= 0.7 ? 3 : bp.intensity >= 0.4 ? 2 : 1
+        for (let layer = 0; layer < pulseLayers; layer++) {
+          const layerProgress = Math.max(0, progress - layer * 0.15)
+          const r = Math.min(width, height) * (0.05 + layerProgress * 0.5)
+          const layerAlpha = alpha * (1 - layer * 0.3)
+
+          const grad = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r)
+          grad.addColorStop(0, `${color}00`)
+          grad.addColorStop(0.6, `${color}${Math.floor(layerAlpha * 120).toString(16).padStart(2, '0')}`)
+          grad.addColorStop(1, `${color}00`)
+          ctx.fillStyle = grad
+          ctx.fillRect(0, 0, width, height)
+        }
+
+        if (bp.intensity >= 0.7) {
+          ctx.strokeStyle = `${color}${Math.floor(alpha * 200).toString(16).padStart(2, '0')}`
+          ctx.lineWidth = 2 * (1 - progress)
+          const ringR = Math.min(width, height) * (0.1 + progress * 0.4)
+          ctx.beginPath()
+          ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+
+        if (bp.type === 'perfect') {
+          const flashAlpha = Math.max(0, (0.15 - progress) / 0.15) * bp.intensity * 0.25
+          if (flashAlpha > 0) {
+            ctx.fillStyle = `${color}${Math.floor(flashAlpha * 255).toString(16).padStart(2, '0')}`
+            ctx.fillRect(0, 0, width, height)
+          }
+        }
+      })
     }
 
     const drawWaveform = (t, waveData) => {
@@ -384,18 +436,49 @@ export default function CanvasRenderer({
       const hitY = height * HIT_LINE_Y
       const laneWidth = getLaneWidth()
 
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+
       for (let i = 0; i < LANE_COUNT; i++) {
         const x = getLaneX(i)
 
-        const laneGrad = ctx.createLinearGradient(x, 0, x, hitY)
-        laneGrad.addColorStop(0, `${keyConfig.colors[i]}00`)
-        laneGrad.addColorStop(0.5, `${keyConfig.colors[i]}0a`)
-        laneGrad.addColorStop(1, `${keyConfig.colors[i]}22`)
+        let laneFlashIntensity = 0
+        let laneFlashColor = null
+        gameDataRef.current.laneFlashes.forEach(lf => {
+          if (lf.lane === i) {
+            const age = time - lf.time
+            if (age < 0.5) {
+              const progress = age / 0.5
+              const intensity = (1 - progress) * (lf.type === 'perfect' ? 1.0 : lf.type === 'great' ? 0.7 : lf.type === 'good' ? 0.45 : 0.35)
+              if (intensity > laneFlashIntensity) {
+                laneFlashIntensity = intensity
+                laneFlashColor = judgeColors[lf.type]
+              }
+            }
+          }
+        })
 
-        ctx.fillStyle = laneGrad
+        const baseGrad = ctx.createLinearGradient(x, 0, x, hitY)
+        if (laneFlashIntensity > 0 && laneFlashColor) {
+          baseGrad.addColorStop(0, `${laneFlashColor}00`)
+          baseGrad.addColorStop(0.5, `${laneFlashColor}${Math.floor(laneFlashIntensity * 35).toString(16).padStart(2, '0')}`)
+          baseGrad.addColorStop(1, `${laneFlashColor}${Math.floor(laneFlashIntensity * 70).toString(16).padStart(2, '0')}`)
+        } else {
+          baseGrad.addColorStop(0, `${keyConfig.colors[i]}00`)
+          baseGrad.addColorStop(0.5, `${keyConfig.colors[i]}0a`)
+          baseGrad.addColorStop(1, `${keyConfig.colors[i]}22`)
+        }
+
+        ctx.fillStyle = baseGrad
         ctx.fillRect(x - laneWidth / 2, 0, laneWidth, hitY + 30)
 
-        ctx.strokeStyle = `${keyConfig.colors[i]}2a`
+        const laneBorderAlpha = laneFlashIntensity > 0 ? Math.min(1, 0.15 + laneFlashIntensity * 0.6) : 0.15
+        const laneBorderColor = laneFlashIntensity > 0 && laneFlashColor ? laneFlashColor : keyConfig.colors[i]
+        ctx.strokeStyle = `${laneBorderColor}${Math.floor(laneBorderAlpha * 255).toString(16).padStart(2, '0')}`
         ctx.lineWidth = 1
         ctx.setLineDash([8, 12])
         ctx.beginPath()
@@ -403,6 +486,19 @@ export default function CanvasRenderer({
         ctx.lineTo(x, hitY)
         ctx.stroke()
         ctx.setLineDash([])
+
+        if (laneFlashIntensity > 0.4) {
+          ctx.strokeStyle = `${laneFlashColor}${Math.floor(laneFlashIntensity * 120).toString(16).padStart(2, '0')}`
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.moveTo(x - laneWidth / 2, 0)
+          ctx.lineTo(x - laneWidth / 2, hitY + 30)
+          ctx.stroke()
+          ctx.beginPath()
+          ctx.moveTo(x + laneWidth / 2, 0)
+          ctx.lineTo(x + laneWidth / 2, hitY + 30)
+          ctx.stroke()
+        }
       }
 
       const hitGlow = 0.5 + Math.sin(t * 4) * 0.3
@@ -410,39 +506,67 @@ export default function CanvasRenderer({
         const x = getLaneX(i)
         const pressed = gameDataRef.current.lanePressed[i]
 
-        const r = laneWidth / 2 + (pressed ? 6 : 0)
+        let hitFlashIntensity = 0
+        let hitFlashColor = null
+        gameDataRef.current.laneFlashes.forEach(lf => {
+          if (lf.lane === i) {
+            const age = time - lf.time
+            if (age < 0.4) {
+              const progress = age / 0.4
+              const intensity = (1 - progress) * (lf.type === 'perfect' ? 1.0 : lf.type === 'great' ? 0.75 : lf.type === 'good' ? 0.5 : 0.4)
+              if (intensity > hitFlashIntensity) {
+                hitFlashIntensity = intensity
+                hitFlashColor = judgeColors[lf.type]
+              }
+            }
+          }
+        })
+
+        const baseColor = hitFlashIntensity > 0 && hitFlashColor ? hitFlashColor : keyConfig.colors[i]
+        const r = laneWidth / 2 + (pressed ? 6 : 0) + hitFlashIntensity * 8
 
         ctx.beginPath()
         ctx.strokeStyle = pressed
-          ? keyConfig.colors[i]
-          : `${keyConfig.colors[i]}88`
-        ctx.lineWidth = pressed ? 3.5 : 2.5
+          ? baseColor
+          : `${baseColor}${Math.floor((hitFlashIntensity > 0 ? (128 + hitFlashIntensity * 127) : 136) / 255 * 255).toString(16).padStart(2, '0')}`
+        ctx.lineWidth = pressed ? 3.5 : (2.5 + hitFlashIntensity * 2)
         ctx.arc(x, hitY, r, 0, Math.PI * 2)
         ctx.stroke()
 
-        const fillAlpha = pressed ? 0.35 : hitGlow * 0.2
+        const fillAlpha = pressed ? 0.35 : hitGlow * 0.2 + hitFlashIntensity * 0.35
         const fillAlphaHex = Math.floor(fillAlpha * 255).toString(16).padStart(2, '0')
-        ctx.fillStyle = `${keyConfig.colors[i]}${fillAlphaHex}`
+        ctx.fillStyle = `${baseColor}${fillAlphaHex}`
         ctx.fill()
 
-        const glowR = r + 12 + Math.sin(t * 2.5 + i) * 5
-        const glowAlpha = (pressed ? 0.7 : hitGlow * 0.4)
+        const glowR = r + 12 + Math.sin(t * 2.5 + i) * 5 + hitFlashIntensity * 15
+        const glowAlpha = (pressed ? 0.7 : hitGlow * 0.4) + hitFlashIntensity * 0.3
         const glowAlphaHex = Math.floor(glowAlpha * 255).toString(16).padStart(2, '0')
         ctx.beginPath()
-        ctx.strokeStyle = `${keyConfig.colors[i]}${glowAlphaHex}`
-        ctx.lineWidth = 1.5
+        ctx.strokeStyle = `${baseColor}${glowAlphaHex}`
+        ctx.lineWidth = 1.5 + hitFlashIntensity * 1.5
         ctx.arc(x, hitY, glowR, 0, Math.PI * 2)
         ctx.stroke()
 
-        if (pressed) {
+        if (pressed || hitFlashIntensity > 0.3) {
           const innerR = r * 0.4
           const innerGrad = ctx.createRadialGradient(x, hitY, 0, x, hitY, innerR)
-          innerGrad.addColorStop(0, `${keyConfig.colors[i]}ff`)
-          innerGrad.addColorStop(1, `${keyConfig.colors[i]}44`)
+          const innerAlpha = pressed ? 1 : (0.5 + hitFlashIntensity * 0.5)
+          innerGrad.addColorStop(0, `${baseColor}${Math.floor(innerAlpha * 255).toString(16).padStart(2, '0')}`)
+          innerGrad.addColorStop(1, `${baseColor}${Math.floor((0.3 + hitFlashIntensity * 0.4) * 255).toString(16).padStart(2, '0')}`)
           ctx.fillStyle = innerGrad
           ctx.beginPath()
-          ctx.arc(x, hitY, innerR, 0, Math.PI * 2)
+          ctx.arc(x, hitY, innerR * (1 + hitFlashIntensity * 0.3), 0, Math.PI * 2)
           ctx.fill()
+        }
+
+        if (hitFlashIntensity > 0.5) {
+          const shockR = r * (1.5 + hitFlashIntensity * 0.5)
+          const shockAlpha = (hitFlashIntensity - 0.5) * 2
+          ctx.beginPath()
+          ctx.strokeStyle = `${hitFlashColor}${Math.floor(shockAlpha * 180).toString(16).padStart(2, '0')}`
+          ctx.lineWidth = shockAlpha * 4
+          ctx.arc(x, hitY, shockR, 0, Math.PI * 2)
+          ctx.stroke()
         }
       }
     }
@@ -705,15 +829,37 @@ export default function CanvasRenderer({
         if (age > 1.0) return
         const progress = age / 1.0
         const x = getLaneX(rp.lane)
-        const r = rp.radius * Math.min(width, height) * 2
-        const alpha = (1 - progress) * 0.6
+        const tier = rp.tier || 0
+        const tierMultiplier = 1 + tier * 0.25
+        const r = rp.radius * Math.min(width, height) * 2 * tierMultiplier
+        const alpha = (1 - progress) * (0.4 + tier * 0.1)
+        const lineWidth = (1 - progress) * (3 + tier * 1.5)
 
         const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
         ctx.beginPath()
         ctx.strokeStyle = `${rp.color}${alphaHex}`
-        ctx.lineWidth = (1 - progress) * 4
+        ctx.lineWidth = lineWidth
         ctx.arc(x, hitY, r, 0, Math.PI * 2)
         ctx.stroke()
+
+        if (tier >= 2) {
+          const alpha2 = (1 - progress) * 0.3
+          const alphaHex2 = Math.floor(alpha2 * 255).toString(16).padStart(2, '0')
+          ctx.beginPath()
+          ctx.strokeStyle = `${rp.color}${alphaHex2}`
+          ctx.lineWidth = lineWidth * 0.5
+          ctx.arc(x, hitY, r * 0.7, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+        if (tier >= 3) {
+          const alpha3 = (1 - progress) * 0.2
+          const alphaHex3 = Math.floor(alpha3 * 255).toString(16).padStart(2, '0')
+          ctx.beginPath()
+          ctx.strokeStyle = `${rp.color}${alphaHex3}`
+          ctx.lineWidth = lineWidth * 0.3
+          ctx.arc(x, hitY, r * 0.4, 0, Math.PI * 2)
+          ctx.stroke()
+        }
       })
 
       gameDataRef.current.hitEffects.forEach(effect => {
@@ -726,21 +872,184 @@ export default function CanvasRenderer({
         }
       })
 
+      drawHitFeedbacks(t, time)
+
       gameDataRef.current.particles.forEach(p => {
         const x = p.x * width
         const y = p.y * height
         const alpha = p.life
+        const tier = p.tier || 0
 
+        if (p.trail && tier >= 2) {
+          const trailLength = tier >= 3 ? 5 : 3
+          for (let tr = 1; tr <= trailLength; tr++) {
+            const trailAlpha = alpha * (1 - tr / (trailLength + 1)) * 0.4
+            const trailX = x - p.vx * width * tr * 2
+            const trailY = y - p.vy * height * tr * 2
+            const trailSize = p.size * p.life * (1 - tr / (trailLength + 1)) * 0.6
+            if (trailAlpha > 0 && trailSize > 0) {
+              const trailAlphaHex = Math.floor(trailAlpha * 255).toString(16).padStart(2, '0')
+              ctx.fillStyle = `${p.color}${trailAlphaHex}`
+              ctx.beginPath()
+              ctx.arc(trailX, trailY, trailSize, 0, Math.PI * 2)
+              ctx.fill()
+            }
+          }
+        }
+
+        const mainSize = p.size * p.life * (1 + tier * 0.15)
         const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
         ctx.fillStyle = `${p.color}${alphaHex}`
         ctx.beginPath()
-        ctx.arc(x, y, p.size * p.life, 0, Math.PI * 2)
+        ctx.arc(x, y, mainSize, 0, Math.PI * 2)
         ctx.fill()
 
-        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.7})`
+        const coreSize = mainSize * (tier >= 2 ? 0.5 : 0.35)
+        ctx.fillStyle = `rgba(255,255,255,${alpha * (tier >= 2 ? 0.9 : 0.7)})`
         ctx.beginPath()
-        ctx.arc(x, y, (p.size * p.life) * 0.35, 0, Math.PI * 2)
+        ctx.arc(x, y, coreSize, 0, Math.PI * 2)
         ctx.fill()
+
+        if (tier >= 3) {
+          const haloSize = mainSize * 2.5
+          const haloAlpha = alpha * 0.25
+          const haloAlphaHex = Math.floor(haloAlpha * 255).toString(16).padStart(2, '0')
+          const haloGrad = ctx.createRadialGradient(x, y, 0, x, y, haloSize)
+          haloGrad.addColorStop(0, `${p.color}${haloAlphaHex}`)
+          haloGrad.addColorStop(1, `${p.color}00`)
+          ctx.fillStyle = haloGrad
+          ctx.beginPath()
+          ctx.arc(x, y, haloSize, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      })
+    }
+
+    const drawHitFeedbacks = (t, time) => {
+      const hitY = height * HIT_LINE_Y
+      const judgeColors = {
+        perfect: '#ffcc00',
+        great: '#00ffcc',
+        good: '#6699ff',
+        miss: '#ff3366'
+      }
+
+      gameDataRef.current.hitFeedbacks.forEach(hf => {
+        const age = time - hf.time
+        if (age > 0.6) return
+        const progress = age / 0.6
+        const x = getLaneX(hf.lane)
+        const y = hitY
+        const color = judgeColors[hf.type]
+
+        if (hf.type === 'miss') {
+          const shakeX = (Math.random() - 0.5) * (1 - progress) * 8
+          const shakeY = (Math.random() - 0.5) * (1 - progress) * 8
+          const missSize = 30 + progress * 20
+          const missAlpha = (1 - progress) * 0.8
+          const missAlphaHex = Math.floor(missAlpha * 255).toString(16).padStart(2, '0')
+
+          ctx.strokeStyle = `${color}${missAlphaHex}`
+          ctx.lineWidth = 3 * (1 - progress * 0.5)
+          ctx.beginPath()
+          ctx.moveTo(x + shakeX - missSize * 0.5, y + shakeY - missSize * 0.5)
+          ctx.lineTo(x + shakeX + missSize * 0.5, y + shakeY + missSize * 0.5)
+          ctx.moveTo(x + shakeX + missSize * 0.5, y + shakeY - missSize * 0.5)
+          ctx.lineTo(x + shakeX - missSize * 0.5, y + shakeY + missSize * 0.5)
+          ctx.stroke()
+          return
+        }
+
+        const scale = 1 + progress * 1.2
+        const alpha = 1 - progress
+        const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+
+        if (hf.type === 'perfect') {
+          const starSize = 20 * scale
+          ctx.save()
+          ctx.translate(x, y - 40 - progress * 30)
+          ctx.rotate(progress * Math.PI * 0.5)
+          ctx.strokeStyle = `${color}${alphaHex}`
+          ctx.lineWidth = 3 * alpha
+          ctx.shadowColor = color
+          ctx.shadowBlur = 20 * alpha
+          ctx.beginPath()
+          for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2 - Math.PI / 2
+            const innerAngle = angle + Math.PI / 5
+            const outerX = Math.cos(angle) * starSize
+            const outerY = Math.sin(angle) * starSize
+            const innerX = Math.cos(innerAngle) * starSize * 0.4
+            const innerY = Math.sin(innerAngle) * starSize * 0.4
+            if (i === 0) ctx.moveTo(outerX, outerY)
+            else ctx.lineTo(outerX, outerY)
+            ctx.lineTo(innerX, innerY)
+          }
+          ctx.closePath()
+          ctx.stroke()
+
+          const fillAlphaHex = Math.floor(alpha * 120).toString(16).padStart(2, '0')
+          ctx.fillStyle = `${color}${fillAlphaHex}`
+          ctx.fill()
+          ctx.shadowBlur = 0
+          ctx.restore()
+        }
+
+        if (hf.type === 'great') {
+          ctx.save()
+          ctx.translate(x, y - 40 - progress * 25)
+          ctx.rotate(progress * Math.PI * 0.3)
+          ctx.strokeStyle = `${color}${alphaHex}`
+          ctx.lineWidth = 3 * alpha
+          ctx.shadowColor = color
+          ctx.shadowBlur = 15 * alpha
+          const diamondSize = 18 * scale
+          ctx.beginPath()
+          ctx.moveTo(0, -diamondSize)
+          ctx.lineTo(diamondSize * 0.6, 0)
+          ctx.lineTo(0, diamondSize)
+          ctx.lineTo(-diamondSize * 0.6, 0)
+          ctx.closePath()
+          ctx.stroke()
+          const fillAlphaHex = Math.floor(alpha * 80).toString(16).padStart(2, '0')
+          ctx.fillStyle = `${color}${fillAlphaHex}`
+          ctx.fill()
+          ctx.shadowBlur = 0
+          ctx.restore()
+        }
+
+        if (hf.type === 'good') {
+          ctx.save()
+          ctx.translate(x, y - 40 - progress * 20)
+          ctx.strokeStyle = `${color}${alphaHex}`
+          ctx.lineWidth = 3 * alpha
+          ctx.shadowColor = color
+          ctx.shadowBlur = 10 * alpha
+          const dotSize = 12 * scale
+          ctx.beginPath()
+          ctx.arc(0, 0, dotSize, 0, Math.PI * 2)
+          ctx.stroke()
+          const fillAlphaHex = Math.floor(alpha * 60).toString(16).padStart(2, '0')
+          ctx.fillStyle = `${color}${fillAlphaHex}`
+          ctx.fill()
+          ctx.shadowBlur = 0
+          ctx.restore()
+        }
+
+        const lineCount = hf.type === 'perfect' ? 8 : hf.type === 'great' ? 5 : 3
+        for (let i = 0; i < lineCount; i++) {
+          const lineAngle = (i / lineCount) * Math.PI * 2 + progress * 2
+          const innerR = 30 * (1 + progress * 0.3)
+          const outerR = 30 * (1 + progress * 1.5) + (hf.type === 'perfect' ? 40 : hf.type === 'great' ? 25 : 15)
+          const lineAlpha = alpha * 0.8
+          const lineAlphaHex = Math.floor(lineAlpha * 255).toString(16).padStart(2, '0')
+          ctx.strokeStyle = `${color}${lineAlphaHex}`
+          ctx.lineWidth = (1 - progress) * (hf.type === 'perfect' ? 3 : 2)
+          ctx.beginPath()
+          ctx.moveTo(x + Math.cos(lineAngle) * innerR, y + Math.sin(lineAngle) * innerR)
+          ctx.lineTo(x + Math.cos(lineAngle) * outerR, y + Math.sin(lineAngle) * outerR)
+          ctx.stroke()
+        }
       })
     }
 
