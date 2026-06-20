@@ -489,6 +489,53 @@ export default function Result({
           />
         </div>
 
+        {bestRecord && (
+          <div style={{
+            ...styles.compareSection,
+            opacity: showDetails ? 1 : 0,
+            transform: showDetails ? 'translateY(0)' : 'translateY(20px)'
+          }}>
+            <div style={styles.compareHeader}>
+              <span style={styles.compareTitle}>📊 成绩对比</span>
+              <span style={styles.compareSubtitle}>本次 vs 历史最佳</span>
+            </div>
+            <div style={styles.compareGrid}>
+              <CompareItem
+                label="分数"
+                currentValue={result.score}
+                bestValue={bestRecord.score}
+                format={(v) => String(v).padStart(8, '0')}
+                isHigherBetter={true}
+                isNewRecord={recordChecks?.isNewBest}
+              />
+              <CompareItem
+                label="准确率"
+                currentValue={result.accuracy}
+                bestValue={bestRecord.accuracy}
+                format={(v) => `${v.toFixed(2)}%`}
+                isHigherBetter={true}
+                isNewRecord={recordChecks?.isNewAccuracy}
+              />
+              <CompareItem
+                label="连击"
+                currentValue={result.maxCombo}
+                bestValue={bestRecord.maxCombo}
+                format={(v) => String(v)}
+                isHigherBetter={true}
+                isNewRecord={recordChecks?.isNewCombo}
+              />
+              <CompareItem
+                label="失误"
+                currentValue={result.stats.miss}
+                bestValue={bestRecord.stats?.miss ?? 0}
+                format={(v) => String(v)}
+                isHigherBetter={false}
+                isNewRecord={false}
+              />
+            </div>
+          </div>
+        )}
+
         <div style={styles.progressSection}>
           <div style={styles.progressLabel}>HIT DISTRIBUTION</div>
           <div style={styles.progressBars}>
@@ -862,6 +909,78 @@ function StatItem({ label, value, color, total, count }) {
   )
 }
 
+function CompareItem({ label, currentValue, bestValue, format, isHigherBetter, isNewRecord }) {
+  const diff = currentValue - bestValue
+  const isImproved = isHigherBetter ? diff > 0 : diff < 0
+  const isEqual = diff === 0
+  const isWorse = isHigherBetter ? diff < 0 : diff > 0
+
+  let diffText = ''
+  let diffColor = 'rgba(255,255,255,0.4)'
+
+  if (isEqual) {
+    diffText = '持平'
+    diffColor = 'rgba(255,255,255,0.5)'
+  } else if (isImproved) {
+    if (label === '准确率') {
+      diffText = `+${diff.toFixed(2)}%`
+    } else if (label === '失误') {
+      diffText = `${diff}`
+    } else {
+      diffText = `+${diff.toLocaleString()}`
+    }
+    diffColor = '#00ffcc'
+  } else {
+    if (label === '准确率') {
+      diffText = `${diff.toFixed(2)}%`
+    } else if (label === '失误') {
+      diffText = `+${Math.abs(diff)}`
+    } else {
+      diffText = `${diff.toLocaleString()}`
+    }
+    diffColor = '#ff3366'
+  }
+
+  const arrowIcon = isEqual ? '—' : (isImproved ? '↑' : '↓')
+
+  return (
+    <div style={{
+      ...compareStyles.container,
+      borderColor: isNewRecord ? 'rgba(255,204,0,0.4)' : undefined,
+      background: isNewRecord
+        ? 'linear-gradient(135deg, rgba(255,204,0,0.08), rgba(255,153,0,0.04))'
+        : undefined
+    }}>
+      <div style={compareStyles.header}>
+        <span style={compareStyles.label}>{label}</span>
+        {isNewRecord && (
+          <span style={compareStyles.newBadge}>🏆 新纪录</span>
+        )}
+      </div>
+      <div style={compareStyles.valuesRow}>
+        <div style={compareStyles.valueBlock}>
+          <span style={compareStyles.valueLabel}>本次</span>
+          <span style={{
+            ...compareStyles.value,
+            color: isNewRecord ? '#ffcc00' : '#fff'
+          }}>{format(currentValue)}</span>
+        </div>
+        <div style={{
+          ...compareStyles.arrowBlock,
+          color: diffColor
+        }}>
+          <span style={compareStyles.arrow}>{arrowIcon}</span>
+          <span style={compareStyles.diffText}>{diffText}</span>
+        </div>
+        <div style={compareStyles.valueBlock}>
+          <span style={compareStyles.valueLabel}>最佳</span>
+          <span style={compareStyles.bestValue}>{format(bestValue)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const statStyles = {
   container: {
     background: 'rgba(255,255,255,0.03)',
@@ -907,6 +1026,82 @@ const statStyles = {
     height: '100%',
     borderRadius: '2px',
     transition: 'width 1s ease-out'
+  }
+}
+
+const compareStyles = {
+  container: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    padding: '14px 16px',
+    transition: 'all 0.3s'
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px'
+  },
+  label: {
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    color: 'rgba(255,255,255,0.7)'
+  },
+  newBadge: {
+    padding: '3px 10px',
+    background: 'linear-gradient(135deg, #ffcc00, #ff9900)',
+    borderRadius: '20px',
+    fontSize: '10px',
+    fontWeight: 800,
+    color: '#00332a',
+    letterSpacing: '1px'
+  },
+  valuesRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  valueBlock: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  valueLabel: {
+    fontSize: '9px',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: '1px'
+  },
+  value: {
+    fontSize: '18px',
+    fontWeight: 800,
+    fontFamily: 'monospace',
+    transition: 'color 0.3s'
+  },
+  bestValue: {
+    fontSize: '18px',
+    fontWeight: 700,
+    fontFamily: 'monospace',
+    color: 'rgba(255,255,255,0.6)'
+  },
+  arrowBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '2px',
+    minWidth: '60px',
+    transition: 'color 0.3s'
+  },
+  arrow: {
+    fontSize: '18px',
+    fontWeight: 900
+  },
+  diffText: {
+    fontSize: '11px',
+    fontWeight: 700,
+    fontFamily: 'monospace'
   }
 }
 
@@ -1150,6 +1345,38 @@ const styles = {
     gap: '12px',
     marginBottom: '24px',
     transition: 'all 0.5s ease-out'
+  },
+  compareSection: {
+    marginBottom: '24px',
+    padding: '20px',
+    background: 'linear-gradient(135deg, rgba(102,153,255,0.05), rgba(0,255,204,0.03))',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px',
+    transition: 'all 0.5s ease-out'
+  },
+  compareHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+    gap: '8px'
+  },
+  compareTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: '2px'
+  },
+  compareSubtitle: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: '1px'
+  },
+  compareGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '12px'
   },
   progressSection: {
     marginBottom: '24px'
