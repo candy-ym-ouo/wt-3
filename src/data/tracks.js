@@ -13,6 +13,94 @@ export const DIFFICULTIES = {
   EXPERT: { id: 'expert', name: '专家', color: '#cc66ff', levelRange: [16, 20], order: 4 }
 }
 
+export const GENRES = {
+  ELECTRONIC: { id: 'electronic', name: '电子', color: '#6699ff', icon: '🎹' },
+  SYNTHWAVE: { id: 'synthwave', name: '合成器浪潮', color: '#ff66cc', icon: '🎛️' },
+  DUBSTEP: { id: 'dubstep', name: 'Dubstep', color: '#ff9933', icon: '🔊' },
+  CYBERPUNK: { id: 'cyberpunk', name: '赛博朋克', color: '#ff3366', icon: '🌃' },
+  AMBIENT: { id: 'ambient', name: '氛围', color: '#66ccff', icon: '🌫️' },
+  PIANO: { id: 'piano', name: '钢琴', color: '#cc99ff', icon: '🎹' },
+  ORCHESTRAL: { id: 'orchestral', name: '管弦乐', color: '#ffcc99', icon: '🎻' },
+  ROCK: { id: 'rock', name: '摇滚', color: '#ff6666', icon: '🎸' },
+  METAL: { id: 'metal', name: '金属', color: '#999999', icon: '🤘' },
+  JPOP: { id: 'jpop', name: 'J-Pop', color: '#ff99cc', icon: '🎤' },
+  KPOP: { id: 'kpop', name: 'K-Pop', color: '#ffccff', icon: '💫' },
+  CLASSICAL: { id: 'classical', name: '古典', color: '#ccaa77', icon: '🎼' },
+  JAZZ: { id: 'jazz', name: '爵士', color: '#ffaa33', icon: '🎷' },
+  HIPHOP: { id: 'hiphop', name: '嘻哈', color: '#66ff99', icon: '🎤' },
+  FOLK: { id: 'folk', name: '民谣', color: '#99cc66', icon: '🎸' }
+}
+
+export const SCENES = {
+  RELAX: { id: 'relax', name: '放松休闲', color: '#66ffcc', icon: '😌', description: '适合放松心情、舒缓压力' },
+  WORKOUT: { id: 'workout', name: '运动健身', color: '#ff6666', icon: '💪', description: '适合运动锻炼、激发活力' },
+  STUDY: { id: 'study', name: '学习工作', color: '#6699ff', icon: '📚', description: '适合专注学习、提高效率' },
+  CHALLENGE: { id: 'challenge', name: '极限挑战', color: '#ffcc00', icon: '🏆', description: '适合高手挑战、突破自我' },
+  WARMUP: { id: 'warmup', name: '热身练习', color: '#66ff99', icon: '🏃', description: '适合新手入门、热身练习' },
+  PARTY: { id: 'party', name: '派对狂欢', color: '#ff33cc', icon: '🎉', description: '适合派对聚会、热闹氛围' },
+  MEDITATION: { id: 'meditation', name: '冥想静心', color: '#9966ff', icon: '🧘', description: '适合冥想静心、深度放松' },
+  COMMUTE: { id: 'commute', name: '通勤路上', color: '#66cc99', icon: '🚇', description: '适合通勤出行、打发时间' }
+}
+
+export const MOODS = {
+  ENERGETIC: { id: 'energetic', name: '活力四射', color: '#ff6600', icon: '⚡' },
+  CALM: { id: 'calm', name: '平静舒缓', color: '#66ccff', icon: '🌊' },
+  EPIC: { id: 'epic', name: '史诗壮阔', color: '#cc66ff', icon: '🌌' },
+  MELANCHOLIC: { id: 'melancholic', name: '忧郁深沉', color: '#6666ff', icon: '🌙' },
+  HAPPY: { id: 'happy', name: '欢快愉悦', color: '#ffcc00', icon: '😊' },
+  MYSTERIOUS: { id: 'mysterious', name: '神秘诡异', color: '#9933ff', icon: '🔮' },
+  ROMANTIC: { id: 'romantic', name: '浪漫温柔', color: '#ff6699', icon: '💕' },
+  INTENSE: { id: 'intense', name: '紧张激烈', color: '#ff0000', icon: '🔥' }
+}
+
+export const FEATURES = {
+  FAST_BPM: { id: 'fast_bpm', name: '高速BPM', color: '#ff6666', icon: '⚡' },
+  SLOW_BPM: { id: 'slow_bpm', name: '慢速BPM', color: '#66ccff', icon: '🐢' },
+  COMPLEX_RHYTHM: { id: 'complex_rhythm', name: '复杂节奏', color: '#ffcc00', icon: '🎯' },
+  LONG_NOTES: { id: 'long_notes', name: '长条音符', color: '#66ff99', icon: '📏' },
+  STAIR_PATTERN: { id: 'stair_pattern', name: '阶梯配置', color: '#cc66ff', icon: '📶' },
+  CROSS_HAND: { id: 'cross_hand', name: '换手配置', color: '#ff9933', icon: '🔄' },
+  JACK_PATTERN: { id: 'jack_pattern', name: '连打配置', color: '#ff3366', icon: '💥' },
+  BREAKDOWN: { id: 'breakdown', name: '间奏变化', color: '#66ffff', icon: '🎭' }
+}
+
+export const TAG_CATEGORIES = {
+  genre: { name: '音乐风格', tags: GENRES },
+  scene: { name: '推荐场景', tags: SCENES },
+  mood: { name: '情绪氛围', tags: MOODS },
+  feature: { name: '谱面特征', tags: FEATURES }
+}
+
+export const getAllTagIds = () => {
+  return {
+    genre: Object.keys(GENRES),
+    scene: Object.keys(SCENES),
+    mood: Object.keys(MOODS),
+    feature: Object.keys(FEATURES)
+  }
+}
+
+export const getTagInfo = (category, tagId) => {
+  const categoryData = TAG_CATEGORIES[category]
+  if (!categoryData) return null
+  return categoryData.tags[tagId.toUpperCase()] || categoryData.tags[tagId] || null
+}
+
+export const getTagDisplayName = (category, tagId) => {
+  const info = getTagInfo(category, tagId)
+  return info?.name || tagId
+}
+
+export const getTagColor = (category, tagId) => {
+  const info = getTagInfo(category, tagId)
+  return info?.color || '#888888'
+}
+
+export const getTagIcon = (category, tagId) => {
+  const info = getTagInfo(category, tagId)
+  return info?.icon || '🏷️'
+}
+
 export const DIFFICULTY_ORDER = ['easy', 'normal', 'hard', 'expert']
 
 export const getDifficultyInfo = (diffId) => {
@@ -480,7 +568,13 @@ export const TRACKS = [
     ],
     packIds: ['starter', 'cosmic'],
     unlockCondition: { type: 'none' },
-    createdAt: '2024-01-15'
+    createdAt: '2024-01-15',
+    tags: {
+      genre: ['electronic', 'synthwave'],
+      scene: ['relax', 'commute'],
+      mood: ['epic', 'mysterious'],
+      feature: ['stair_pattern']
+    }
   },
   {
     id: 'void',
@@ -562,7 +656,13 @@ export const TRACKS = [
     ],
     packIds: ['electronic', 'cosmic', 'master'],
     unlockCondition: { type: 'level', minLevel: 2 },
-    createdAt: '2024-02-20'
+    createdAt: '2024-02-20',
+    tags: {
+      genre: ['electronic', 'dubstep'],
+      scene: ['challenge', 'workout', 'party'],
+      mood: ['intense', 'energetic'],
+      feature: ['fast_bpm', 'complex_rhythm', 'jack_pattern']
+    }
   },
   {
     id: 'crystal_dream',
@@ -616,7 +716,13 @@ export const TRACKS = [
     ],
     packIds: ['starter'],
     unlockCondition: { type: 'none' },
-    createdAt: '2024-03-10'
+    createdAt: '2024-03-10',
+    tags: {
+      genre: ['ambient', 'piano'],
+      scene: ['relax', 'study', 'meditation', 'warmup'],
+      mood: ['calm', 'romantic'],
+      feature: ['slow_bpm']
+    }
   },
   {
     id: 'neon_runner',
@@ -684,7 +790,13 @@ export const TRACKS = [
     ],
     packIds: ['electronic', 'master'],
     unlockCondition: { type: 'trackClear', trackId: 'nebula', difficulty: 'normal' },
-    createdAt: '2024-04-05'
+    createdAt: '2024-04-05',
+    tags: {
+      genre: ['electronic', 'cyberpunk'],
+      scene: ['challenge', 'workout', 'party'],
+      mood: ['energetic', 'mysterious', 'intense'],
+      feature: ['fast_bpm', 'complex_rhythm', 'cross_hand']
+    }
   },
   {
     id: 'cosmic_dust',
@@ -752,7 +864,13 @@ export const TRACKS = [
     ],
     packIds: ['cosmic'],
     unlockCondition: { type: 'trackClear', trackId: 'nebula', difficulty: 'normal' },
-    createdAt: '2024-05-18'
+    createdAt: '2024-05-18',
+    tags: {
+      genre: ['ambient', 'electronic'],
+      scene: ['relax', 'commute', 'meditation'],
+      mood: ['epic', 'mysterious', 'calm'],
+      feature: ['stair_pattern', 'breakdown']
+    }
   }
 ]
 
@@ -943,6 +1061,395 @@ export const tracks = TRACKS.map(t => {
     preview: t.preview,
     difficulties: t.difficulties,
     packIds: t.packIds,
-    unlockCondition: t.unlockCondition
+    unlockCondition: t.unlockCondition,
+    tags: t.tags
   }
 })
+
+export const calculateTrackSimilarity = (trackA, trackB) => {
+  if (!trackA || !trackB) return 0
+  if (trackA.id === trackB.id) return 0
+
+  let score = 0
+  let maxScore = 0
+
+  if (trackA.tags && trackB.tags) {
+    maxScore += 4
+    const genresA = trackA.tags.genre || []
+    const genresB = trackB.tags.genre || []
+    const genreMatches = genresA.filter(g => genresB.includes(g)).length
+    if (genreMatches > 0) score += Math.min(genreMatches, 2)
+
+    const scenesA = trackA.tags.scene || []
+    const scenesB = trackB.tags.scene || []
+    const sceneMatches = scenesA.filter(s => scenesB.includes(s)).length
+    if (sceneMatches > 0) score += Math.min(sceneMatches, 1)
+
+    const moodsA = trackA.tags.mood || []
+    const moodsB = trackB.tags.mood || []
+    const moodMatches = moodsA.filter(m => moodsB.includes(m)).length
+    if (moodMatches > 0) score += Math.min(moodMatches, 1)
+  }
+
+  maxScore += 2
+  const bpmDiff = Math.abs(trackA.bpm - trackB.bpm)
+  if (bpmDiff <= 10) score += 2
+  else if (bpmDiff <= 30) score += 1
+
+  maxScore += 1
+  if (Math.abs((trackA.difficulties?.[0]?.level || 0) - (trackB.difficulties?.[0]?.level || 0)) <= 2) {
+    score += 1
+  }
+
+  return maxScore > 0 ? score / maxScore : 0
+}
+
+export const analyzePlayerPreferences = (playHistory, bestRecords) => {
+  const preferences = {
+    genreCount: {},
+    sceneCount: {},
+    moodCount: {},
+    featureCount: {},
+    bpmRange: { min: Infinity, max: -Infinity, avg: 0 },
+    levelRange: { min: Infinity, max: -Infinity, avg: 0 },
+    totalPlays: 0,
+    favoriteGenres: [],
+    favoriteScenes: [],
+    favoriteMoods: []
+  }
+
+  const trackCache = {}
+  const getTrack = (id) => {
+    if (!trackCache[id]) trackCache[id] = getTrackById(id)
+    return trackCache[id]
+  }
+
+  const updateTagCounts = (track, countMap, category, weight = 1) => {
+    const tags = track?.tags?.[category] || []
+    tags.forEach(tag => {
+      countMap[tag] = (countMap[tag] || 0) + weight
+    })
+  }
+
+  let bpmSum = 0
+  let levelSum = 0
+  let bpmCount = 0
+  let levelCount = 0
+
+  if (playHistory && playHistory.length > 0) {
+    playHistory.forEach((entry, index) => {
+      const recencyWeight = Math.max(0.3, 1 - index * 0.01)
+      const scoreWeight = entry.score ? Math.min(2, entry.score / 500000 + 0.5) : 1
+      const weight = recencyWeight * scoreWeight
+
+      const track = getTrack(entry.trackId)
+      if (track) {
+        updateTagCounts(track, preferences.genreCount, 'genre', weight)
+        updateTagCounts(track, preferences.sceneCount, 'scene', weight)
+        updateTagCounts(track, preferences.moodCount, 'mood', weight)
+        updateTagCounts(track, preferences.featureCount, 'feature', weight)
+
+        preferences.bpmRange.min = Math.min(preferences.bpmRange.min, track.bpm)
+        preferences.bpmRange.max = Math.max(preferences.bpmRange.max, track.bpm)
+        bpmSum += track.bpm
+        bpmCount++
+
+        const level = entry.level || track.difficulties?.[0]?.level || 0
+        if (level > 0) {
+          preferences.levelRange.min = Math.min(preferences.levelRange.min, level)
+          preferences.levelRange.max = Math.max(preferences.levelRange.max, level)
+          levelSum += level
+          levelCount++
+        }
+
+        preferences.totalPlays++
+      }
+    })
+  }
+
+  if (bestRecords) {
+    Object.values(bestRecords).forEach(record => {
+      if (record.cleared) {
+        const weight = record.score ? Math.min(1.5, record.score / 1000000 + 0.5) : 1
+        const track = getTrack(record.trackId)
+        if (track) {
+          updateTagCounts(track, preferences.genreCount, 'genre', weight * 0.5)
+          updateTagCounts(track, preferences.sceneCount, 'scene', weight * 0.5)
+          updateTagCounts(track, preferences.moodCount, 'mood', weight * 0.5)
+        }
+      }
+    })
+  }
+
+  if (bpmCount > 0) preferences.bpmRange.avg = Math.round(bpmSum / bpmCount)
+  if (levelCount > 0) preferences.levelRange.avg = Math.round(levelSum / levelCount)
+  if (preferences.bpmRange.min === Infinity) {
+    preferences.bpmRange = { min: 120, max: 140, avg: 130 }
+    preferences.levelRange = { min: 5, max: 10, avg: 7 }
+  }
+
+  const getTopTags = (countMap, limit = 3) => {
+    return Object.entries(countMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => id)
+  }
+
+  preferences.favoriteGenres = getTopTags(preferences.genreCount, 3)
+  preferences.favoriteScenes = getTopTags(preferences.sceneCount, 3)
+  preferences.favoriteMoods = getTopTags(preferences.moodCount, 3)
+
+  return preferences
+}
+
+export const getRecommendedTracks = ({
+  allTracks = TRACKS,
+  playerData = null,
+  playHistory = [],
+  bestRecords = {},
+  sceneFilter = null,
+  limit = 6,
+  getBestRecordFn = null
+}) => {
+  const preferences = analyzePlayerPreferences(playHistory, bestRecords)
+  const clearedTrackIds = new Set()
+
+  if (bestRecords) {
+    Object.values(bestRecords).forEach(r => {
+      if (r.cleared) clearedTrackIds.add(r.trackId)
+    })
+  }
+
+  const recentTrackIds = new Set(
+    playHistory?.slice(0, 10).map(h => h.trackId) || []
+  )
+
+  const calculateRecommendationScore = (track) => {
+    let score = 0
+    const baseScore = 50
+
+    if (!clearedTrackIds.has(track.id)) {
+      score += 30
+    }
+
+    if (!recentTrackIds.has(track.id)) {
+      score += 15
+    } else {
+      score -= 20
+    }
+
+    if (track.tags) {
+      if (preferences.favoriteGenres.length > 0 && track.tags.genre) {
+        const genreMatch = track.tags.genre.some(g => preferences.favoriteGenres.includes(g))
+        if (genreMatch) score += 25
+      }
+
+      if (preferences.favoriteScenes.length > 0 && track.tags.scene) {
+        const sceneMatch = track.tags.scene.some(s => preferences.favoriteScenes.includes(s))
+        if (sceneMatch) score += 20
+      }
+
+      if (preferences.favoriteMoods.length > 0 && track.tags.mood) {
+        const moodMatch = track.tags.mood.some(m => preferences.favoriteMoods.includes(m))
+        if (moodMatch) score += 15
+      }
+    }
+
+    if (sceneFilter && track.tags?.scene?.includes(sceneFilter)) {
+      score += 40
+    }
+
+    const playerLevel = playerData?.level || 1
+    const normalDiff = track.difficulties?.find(d => d.id === 'normal')
+    const trackLevel = normalDiff?.level || 5
+    const levelDiff = Math.abs(playerLevel - trackLevel)
+    if (levelDiff <= 1) score += 20
+    else if (levelDiff <= 3) score += 10
+    else if (levelDiff >= 6) score -= 15
+
+    if (track.bpm >= preferences.bpmRange.min - 20 && track.bpm <= preferences.bpmRange.max + 20) {
+      score += 10
+    }
+
+    const unlockCheck = checkUnlockCondition(track.unlockCondition, playerData, bestRecords)
+    if (!unlockCheck.unlocked) score -= 30
+
+    const bestScore = getBestRecordFn ? getBestRecordFn(track.id)?.score || 0 : 0
+    if (bestScore > 0) {
+      score -= Math.min(20, bestScore / 100000)
+    }
+
+    return baseScore + score
+  }
+
+  const recommendations = allTracks
+    .filter(t => {
+      const unlockCheck = checkUnlockCondition(t.unlockCondition, playerData, bestRecords)
+      return unlockCheck.unlocked
+    })
+    .map(track => ({
+      track,
+      score: calculateRecommendationScore(track)
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((item, index) => ({
+      ...item.track,
+      recommendation: {
+        score: item.score,
+        rank: index + 1,
+        reasons: generateRecommendationReasons(item.track, preferences, clearedTrackIds, sceneFilter, playerData)
+      }
+    }))
+
+  return recommendations
+}
+
+const generateRecommendationReasons = (track, preferences, clearedTrackIds, sceneFilter, playerData) => {
+  const reasons = []
+
+  if (!clearedTrackIds.has(track.id)) {
+    reasons.push({ type: 'new', text: '未通关曲目', icon: '✨', priority: 1 })
+  }
+
+  if (track.tags?.genre && preferences.favoriteGenres.length > 0) {
+    const matchedGenres = track.tags.genre.filter(g => preferences.favoriteGenres.includes(g))
+    if (matchedGenres.length > 0) {
+      reasons.push({
+        type: 'genre',
+        text: `你喜欢的${matchedGenres.map(g => getTagDisplayName('genre', g)).join('、')}风格`,
+        icon: getTagIcon('genre', matchedGenres[0]),
+        priority: 2
+      })
+    }
+  }
+
+  if (sceneFilter && track.tags?.scene?.includes(sceneFilter)) {
+    const sceneInfo = getTagInfo('scene', sceneFilter)
+    reasons.push({
+      type: 'scene',
+      text: `${sceneInfo?.name || ''}场景推荐`,
+      icon: sceneInfo?.icon || '🎯',
+      priority: 1
+    })
+  }
+
+  const playerLevel = playerData?.level || 1
+  const normalDiff = track.difficulties?.find(d => d.id === 'normal')
+  const trackLevel = normalDiff?.level || 5
+  if (Math.abs(playerLevel - trackLevel) <= 2) {
+    reasons.push({
+      type: 'level',
+      text: `适合当前等级 Lv.${playerLevel}`,
+      icon: '🎯',
+      priority: 3
+    })
+  }
+
+  return reasons.sort((a, b) => a.priority - b.priority).slice(0, 3)
+}
+
+export const getTracksByTag = (allTracks = TRACKS, category, tagId) => {
+  return allTracks.filter(track =>
+    track.tags?.[category]?.includes(tagId)
+  )
+}
+
+export const getTracksByScene = (allTracks = TRACKS, sceneId) => {
+  return getTracksByTag(allTracks, 'scene', sceneId)
+}
+
+export const getTracksByGenre = (allTracks = TRACKS, genreId) => {
+  return getTracksByTag(allTracks, 'genre', genreId)
+}
+
+export const autoGenerateTrackTags = (track) => {
+  const tags = {
+    genre: [],
+    scene: [],
+    mood: [],
+    feature: []
+  }
+
+  if (track.bpm >= 160) {
+    tags.feature.push('fast_bpm')
+    tags.mood.push('energetic')
+    tags.scene.push('workout')
+  } else if (track.bpm <= 100) {
+    tags.feature.push('slow_bpm')
+    tags.mood.push('calm')
+    tags.scene.push('relax')
+    tags.scene.push('study')
+  } else {
+    tags.mood.push('happy')
+  }
+
+  const normalDiff = track.difficulties?.find(d => d.id === 'normal')
+  const level = normalDiff?.level || 5
+  const noteCount = normalDiff?.totalNotes || 0
+
+  if (level >= 13) {
+    tags.scene.push('challenge')
+    tags.mood.push('intense')
+  } else if (level <= 3) {
+    tags.scene.push('warmup')
+  }
+
+  if (noteCount >= 300 && level >= 8) {
+    tags.feature.push('complex_rhythm')
+  }
+
+  if (track.genre) {
+    const genreLower = track.genre.toLowerCase()
+    if (genreLower.includes('电子') || genreLower.includes('electronic')) {
+      tags.genre.push('electronic')
+    }
+    if (genreLower.includes('合成器') || genreLower.includes('synth')) {
+      tags.genre.push('synthwave')
+    }
+    if (genreLower.includes('dubstep')) {
+      tags.genre.push('dubstep')
+      tags.mood.push('intense')
+    }
+    if (genreLower.includes('赛博') || genreLower.includes('cyber')) {
+      tags.genre.push('cyberpunk')
+      tags.mood.push('mysterious')
+    }
+    if (genreLower.includes('氛围') || genreLower.includes('ambient')) {
+      tags.genre.push('ambient')
+      tags.scene.push('meditation')
+      tags.mood.push('calm')
+    }
+    if (genreLower.includes('钢琴') || genreLower.includes('piano')) {
+      tags.genre.push('piano')
+      tags.scene.push('study')
+    }
+  }
+
+  if (track.preview?.tags) {
+    track.preview.tags.forEach(tag => {
+      const tagLower = tag.toLowerCase()
+      if (tagLower.includes('太空') || tagLower.includes('宇宙')) {
+        tags.mood.push('epic')
+        tags.mood.push('mysterious')
+      }
+      if (tagLower.includes('治愈')) {
+        tags.mood.push('calm')
+        tags.scene.push('relax')
+      }
+      if (tagLower.includes('挑战') || tagLower.includes('高难度')) {
+        tags.scene.push('challenge')
+      }
+      if (tagLower.includes('高速')) {
+        tags.feature.push('fast_bpm')
+      }
+    })
+  }
+
+  tags.genre = [...new Set(tags.genre)]
+  tags.scene = [...new Set(tags.scene)]
+  tags.mood = [...new Set(tags.mood)]
+  tags.feature = [...new Set(tags.feature)]
+
+  return tags
+}

@@ -4,7 +4,10 @@ import {
   TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty,
   sortDifficulties, getTrackDifficultyStats, getTrackDifficultySummary,
   getDifficultyInfo, getDifficultyColor, getDifficultyName, normalizeDifficultyId,
-  makeRecordKey
+  makeRecordKey, GENRES, SCENES, MOODS, FEATURES, TAG_CATEGORIES,
+  getTagInfo, getTagDisplayName, getTagColor, getTagIcon,
+  getRecommendedTracks, getTracksByTag, analyzePlayerPreferences,
+  autoGenerateTrackTags
 } from '../data/tracks.js'
 
 export default function TrackSelect({
@@ -28,7 +31,8 @@ export default function TrackSelect({
   dailyChallengeState,
   onOpenDailyChallenge,
   onOpenStoryMode,
-  onOpenImporter
+  onOpenImporter,
+  playHistory = []
 }) {
   const [selectedTrackIndex, setSelectedTrackIndex] = useState(0)
   const [selectedDifficultyId, setSelectedDifficultyId] = useState(null)
@@ -46,6 +50,11 @@ export default function TrackSelect({
   const [clearStatus, setClearStatus] = useState('all')
   const [overallClearStatus, setOverallClearStatus] = useState('all')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [selectedScene, setSelectedScene] = useState(null)
+  const [selectedGenre, setSelectedGenre] = useState(null)
+  const [selectedMood, setSelectedMood] = useState(null)
+  const [showRecommendations, setShowRecommendations] = useState(true)
+  const [showTagFilters, setShowTagFilters] = useState(false)
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const timeRef = useRef(0)
@@ -173,14 +182,35 @@ export default function TrackSelect({
       const matchingDiff = getMatchingDifficulty(track)
       const diffStats = getTrackDifficultyStats(track, getBestRecord)
       const diffSummary = getTrackDifficultySummary(track, getBestRecord)
-      return {
+      const trackWithTags = {
         ...track,
+        tags: track.tags || autoGenerateTrackTags(track)
+      }
+      return {
+        ...trackWithTags,
         matchingDifficulty: matchingDiff,
         difficultyStats: diffStats,
         difficultySummary: diffSummary
       }
     })
   }, [tracks, getMatchingDifficulty, getBestRecord])
+
+  const recommendedTracks = useMemo(() => {
+    if (!showRecommendations) return []
+    return getRecommendedTracks({
+      allTracks: tracksWithMatchingDifficulty,
+      playerData,
+      playHistory,
+      bestRecords,
+      sceneFilter: selectedScene,
+      limit: 6,
+      getBestRecordFn: getBestRecord
+    })
+  }, [tracksWithMatchingDifficulty, playerData, playHistory, bestRecords, selectedScene, showRecommendations, getBestRecord])
+
+  const playerPreferences = useMemo(() => {
+    return analyzePlayerPreferences(playHistory, bestRecords)
+  }, [playHistory, bestRecords])
 
   const filteredTracks = useMemo(() => {
     let result = [...tracksWithMatchingDifficulty]
@@ -197,13 +227,28 @@ export default function TrackSelect({
       result = result.filter(t => getTrackOverallClearStatus(t) === overallClearStatus)
     }
 
+    if (selectedGenre) {
+      result = result.filter(t => t.tags?.genre?.includes(selectedGenre))
+    }
+
+    if (selectedScene) {
+      result = result.filter(t => t.tags?.scene?.includes(selectedScene))
+    }
+
+    if (selectedMood) {
+      result = result.filter(t => t.tags?.mood?.includes(selectedMood))
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(t =>
         t.title.toLowerCase().includes(q) ||
         t.artist.toLowerCase().includes(q) ||
         t.genre?.toLowerCase().includes(q) ||
-        t.preview?.tags?.some(tag => tag.toLowerCase().includes(q))
+        t.preview?.tags?.some(tag => tag.toLowerCase().includes(q)) ||
+        t.tags?.genre?.some(g => getTagDisplayName('genre', g).toLowerCase().includes(q)) ||
+        t.tags?.scene?.some(s => getTagDisplayName('scene', s).toLowerCase().includes(q)) ||
+        t.tags?.mood?.some(m => getTagDisplayName('mood', m).toLowerCase().includes(q))
       )
     }
 
@@ -262,6 +307,14 @@ export default function TrackSelect({
         result.sort((a, b) => getProgress(b) - getProgress(a))
         break
       }
+      case 'recommendation': {
+        result.sort((a, b) => {
+          const recA = recommendedTracks.find(r => r.id === a.id)?.recommendation?.score || 0
+          const recB = recommendedTracks.find(r => r.id === b.id)?.recommendation?.score || 0
+          return recB - recA
+        })
+        break
+      }
       default:
         break
     }
@@ -270,7 +323,8 @@ export default function TrackSelect({
   }, [
     tracksWithMatchingDifficulty, selectedPackId, searchQuery, showOnlyUnlocked, sortBy,
     playerData, bestRecords, bpmRange, overallClearStatus,
-    getTrackOverallClearStatus, getDifficultyClearStatus, getDifficultyScore, getDifficultyAccuracy
+    getTrackOverallClearStatus, getDifficultyClearStatus, getDifficultyScore, getDifficultyAccuracy,
+    selectedGenre, selectedScene, selectedMood, recommendedTracks
   ])
 
   useEffect(() => {
@@ -592,6 +646,7 @@ export default function TrackSelect({
                   onChange={(e) => setSortBy(e.target.value)}
                 >
                   <option value="default">默认排序</option>
+                  <option value="recommendation">✨ 智能推荐</option>
                   <option value="level_asc">难度 ↑</option>
                   <option value="level_desc">难度 ↓</option>
                   <option value="bpm_asc">BPM ↑</option>
@@ -605,6 +660,16 @@ export default function TrackSelect({
                   <option value="artist">艺术家</option>
                 </select>
               </div>
+
+              <button
+                style={{
+                  ...styles.advancedFilterBtn,
+                  ...(showTagFilters ? styles.advancedFilterBtnActive : {})
+                }}
+                onClick={() => setShowTagFilters(!showTagFilters)}
+              >
+                🏷️ 标签筛选 {showTagFilters ? '▲' : '▼'}
+              </button>
 
               <label style={styles.checkboxLabel}>
                 <input
@@ -626,6 +691,115 @@ export default function TrackSelect({
                 {showAdvancedFilters ? '▲' : '▼'} 高级筛选
               </button>
             </div>
+
+            {showTagFilters && (
+              <div style={styles.tagFilters}>
+                <div style={styles.tagFilterSection}>
+                  <span style={styles.filterLabel}>🎬 推荐场景:</span>
+                  <div style={styles.tagChips}>
+                    <button
+                      style={{
+                        ...styles.tagChip,
+                        ...(selectedScene === null ? styles.tagChipActive : {})
+                      }}
+                      onClick={() => setSelectedScene(null)}
+                    >
+                      全部
+                    </button>
+                    {Object.values(SCENES).map(scene => (
+                      <button
+                        key={scene.id}
+                        style={{
+                          ...styles.tagChip,
+                          ...(selectedScene === scene.id ? {
+                            ...styles.tagChipActive,
+                            borderColor: scene.color,
+                            color: scene.color
+                          } : {})
+                        }}
+                        onClick={() => setSelectedScene(selectedScene === scene.id ? null : scene.id)}
+                        title={scene.description}
+                      >
+                        {scene.icon} {scene.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={styles.tagFilterSection}>
+                  <span style={styles.filterLabel}>🎵 音乐风格:</span>
+                  <div style={styles.tagChips}>
+                    <button
+                      style={{
+                        ...styles.tagChip,
+                        ...(selectedGenre === null ? styles.tagChipActive : {})
+                      }}
+                      onClick={() => setSelectedGenre(null)}
+                    >
+                      全部
+                    </button>
+                    {Object.values(GENRES).map(genre => (
+                      <button
+                        key={genre.id}
+                        style={{
+                          ...styles.tagChip,
+                          ...(selectedGenre === genre.id ? {
+                            ...styles.tagChipActive,
+                            borderColor: genre.color,
+                            color: genre.color
+                          } : {})
+                        }}
+                        onClick={() => setSelectedGenre(selectedGenre === genre.id ? null : genre.id)}
+                      >
+                        {genre.icon} {genre.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={styles.tagFilterSection}>
+                  <span style={styles.filterLabel}>🎭 情绪氛围:</span>
+                  <div style={styles.tagChips}>
+                    <button
+                      style={{
+                        ...styles.tagChip,
+                        ...(selectedMood === null ? styles.tagChipActive : {})
+                      }}
+                      onClick={() => setSelectedMood(null)}
+                    >
+                      全部
+                    </button>
+                    {Object.values(MOODS).map(mood => (
+                      <button
+                        key={mood.id}
+                        style={{
+                          ...styles.tagChip,
+                          ...(selectedMood === mood.id ? {
+                            ...styles.tagChipActive,
+                            borderColor: mood.color,
+                            color: mood.color
+                          } : {})
+                        }}
+                        onClick={() => setSelectedMood(selectedMood === mood.id ? null : mood.id)}
+                      >
+                        {mood.icon} {mood.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  style={styles.resetFiltersBtn}
+                  onClick={() => {
+                    setSelectedGenre(null)
+                    setSelectedScene(null)
+                    setSelectedMood(null)
+                  }}
+                >
+                  ↺ 重置标签筛选
+                </button>
+              </div>
+            )}
 
             {showAdvancedFilters && (
               <div style={styles.advancedFilters}>
@@ -803,8 +977,110 @@ export default function TrackSelect({
             )}
           </div>
 
+          {showRecommendations && recommendedTracks.length > 0 && (
+            <div style={styles.recommendationSection}>
+              <div style={styles.recommendationHeader}>
+                <h2 style={styles.sectionTitle}>
+                  <span style={{ marginRight: '8px' }}>✨</span>
+                  为你推荐
+                  {selectedScene && (
+                    <span style={{ fontSize: '14px', fontWeight: 'normal', opacity: 0.7, marginLeft: '10px' }}>
+                      · {getTagInfo('scene', selectedScene)?.icon} {getTagInfo('scene', selectedScene)?.name}
+                    </span>
+                  )}
+                </h2>
+                <div style={styles.recommendationHeaderRight}>
+                  {playerPreferences.favoriteGenres.length > 0 && (
+                    <span style={styles.preferenceHint}>
+                      你喜欢: {playerPreferences.favoriteGenres.slice(0, 2).map(g => (
+                        <span key={g} style={{ marginLeft: '4px' }}>
+                          {getTagIcon('genre', g)} {getTagDisplayName('genre', g)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <button
+                    style={styles.refreshRecBtn}
+                    onClick={() => setShowRecommendations(!showRecommendations)}
+                  >
+                    {showRecommendations ? '隐藏推荐' : '显示推荐'}
+                  </button>
+                </div>
+              </div>
+              <div style={styles.recommendationGrid}>
+                {recommendedTracks.map((track, idx) => {
+                  const unlockCheck = checkUnlockCondition(track.unlockCondition, playerData, bestRecords)
+                  const diffSummary = getTrackDifficultySummary(track, getBestRecord)
+                  return (
+                    <div
+                      key={`rec-${track.id}`}
+                      style={{
+                        ...styles.recommendationCard,
+                        ...(!unlockCheck.unlocked ? styles.trackCardLocked : {})
+                      }}
+                      onClick={() => {
+                        if (unlockCheck.unlocked) {
+                          const idxInFiltered = filteredTracks.findIndex(t => t.id === track.id)
+                          if (idxInFiltered !== -1) {
+                            setSelectedTrackIndex(idxInFiltered)
+                            const matchingDiff = filteredTracks[idxInFiltered].matchingDifficulty
+                            if (matchingDiff) {
+                              setSelectedDifficultyId(matchingDiff.id)
+                            }
+                          }
+                        }
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...styles.recCardCover,
+                          background: `linear-gradient(135deg, ${track.preview?.coverGradient?.[0] || '#ff3366'}, ${track.preview?.coverGradient?.[1] || '#6633ff'})`
+                        }}
+                      >
+                        <div style={styles.recRankBadge}>#{track.recommendation.rank}</div>
+                        <span style={styles.recCardCoverIcon}>♪</span>
+                      </div>
+                      <div style={styles.recCardContent}>
+                        <div style={styles.recCardTitle}>{track.title}</div>
+                        <div style={styles.recCardArtist}>{track.artist}</div>
+                        {track.recommendation.reasons.length > 0 && (
+                          <div style={styles.recReasons}>
+                            {track.recommendation.reasons.map((reason, i) => (
+                              <span key={i} style={styles.recReasonBadge}>
+                                {reason.icon} {reason.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {track.tags && (
+                          <div style={styles.recCardTags}>
+                            {track.tags.genre?.slice(0, 2).map((g, i) => (
+                              <span
+                                key={i}
+                                style={{
+                                  ...styles.recCardTag,
+                                  color: getTagColor('genre', g),
+                                  borderColor: getTagColor('genre', g) + '44'
+                                }}
+                              >
+                                {getTagIcon('genre', g)} {getTagDisplayName('genre', g)}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div style={styles.tracksHeader}>
-            <h2 style={styles.sectionTitle}>选择曲目</h2>
+            <h2 style={styles.sectionTitle}>
+              <span style={{ marginRight: '8px' }}>🎵</span>
+              所有曲目
+            </h2>
             <span style={styles.trackCount}>
               {filteredTracks.length} / {tracks.length} 首
             </span>
@@ -898,6 +1174,46 @@ export default function TrackSelect({
                         <div style={styles.trackArtist}>{t.artist}</div>
                         {t.genre && (
                           <div style={styles.trackGenre}>{t.genre}</div>
+                        )}
+                        {t.tags && (
+                          <div style={styles.cardTagsRow}>
+                            {t.tags.genre?.slice(0, 2).map((g, i) => (
+                              <span
+                                key={`g-${i}`}
+                                style={{
+                                  ...styles.cardTag,
+                                  color: getTagColor('genre', g),
+                                  borderColor: getTagColor('genre', g) + '44',
+                                  background: getTagColor('genre', g) + '11'
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedGenre(selectedGenre === g ? null : g)
+                                  setShowTagFilters(true)
+                                }}
+                              >
+                                {getTagIcon('genre', g)} {getTagDisplayName('genre', g)}
+                              </span>
+                            ))}
+                            {t.tags.scene?.slice(0, 2).map((s, i) => (
+                              <span
+                                key={`s-${i}`}
+                                style={{
+                                  ...styles.cardTag,
+                                  color: getTagColor('scene', s),
+                                  borderColor: getTagColor('scene', s) + '44',
+                                  background: getTagColor('scene', s) + '11'
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedScene(selectedScene === s ? null : s)
+                                  setShowTagFilters(true)
+                                }}
+                              >
+                                {getTagIcon('scene', s)} {getTagDisplayName('scene', s)}
+                              </span>
+                            ))}
+                          </div>
                         )}
                         {best && (
                           <div style={styles.trackBest}>
@@ -1136,6 +1452,107 @@ export default function TrackSelect({
                 </div>
               )}
             </div>
+
+            {track.tags && (
+              <div style={styles.structuredTagsContainer}>
+                {track.tags.genre?.length > 0 && (
+                  <div style={styles.tagGroup}>
+                    <span style={styles.tagGroupLabel}>🎵 风格</span>
+                    <div style={styles.tagGroupTags}>
+                      {track.tags.genre.map((g, i) => (
+                        <span
+                          key={`g-${i}`}
+                          style={{
+                            ...styles.structuredTag,
+                            color: getTagColor('genre', g),
+                            borderColor: getTagColor('genre', g),
+                            background: getTagColor('genre', g) + '15'
+                          }}
+                          onClick={() => {
+                            setSelectedGenre(selectedGenre === g ? null : g)
+                            setShowTagFilters(true)
+                          }}
+                        >
+                          {getTagIcon('genre', g)} {getTagDisplayName('genre', g)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {track.tags.scene?.length > 0 && (
+                  <div style={styles.tagGroup}>
+                    <span style={styles.tagGroupLabel}>🎬 场景</span>
+                    <div style={styles.tagGroupTags}>
+                      {track.tags.scene.map((s, i) => (
+                        <span
+                          key={`s-${i}`}
+                          style={{
+                            ...styles.structuredTag,
+                            color: getTagColor('scene', s),
+                            borderColor: getTagColor('scene', s),
+                            background: getTagColor('scene', s) + '15'
+                          }}
+                          onClick={() => {
+                            setSelectedScene(selectedScene === s ? null : s)
+                            setShowTagFilters(true)
+                          }}
+                          title={getTagInfo('scene', s)?.description}
+                        >
+                          {getTagIcon('scene', s)} {getTagDisplayName('scene', s)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {track.tags.mood?.length > 0 && (
+                  <div style={styles.tagGroup}>
+                    <span style={styles.tagGroupLabel}>🎭 情绪</span>
+                    <div style={styles.tagGroupTags}>
+                      {track.tags.mood.map((m, i) => (
+                        <span
+                          key={`m-${i}`}
+                          style={{
+                            ...styles.structuredTag,
+                            color: getTagColor('mood', m),
+                            borderColor: getTagColor('mood', m),
+                            background: getTagColor('mood', m) + '15'
+                          }}
+                          onClick={() => {
+                            setSelectedMood(selectedMood === m ? null : m)
+                            setShowTagFilters(true)
+                          }}
+                        >
+                          {getTagIcon('mood', m)} {getTagDisplayName('mood', m)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {track.tags.feature?.length > 0 && (
+                  <div style={styles.tagGroup}>
+                    <span style={styles.tagGroupLabel}>⚡ 谱面特征</span>
+                    <div style={styles.tagGroupTags}>
+                      {track.tags.feature.map((f, i) => (
+                        <span
+                          key={`f-${i}`}
+                          style={{
+                            ...styles.structuredTag,
+                            color: getTagColor('feature', f),
+                            borderColor: getTagColor('feature', f),
+                            background: getTagColor('feature', f) + '15'
+                          }}
+                        >
+                          {getTagIcon('feature', f)} {getTagDisplayName('feature', f)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {track.preview?.tags?.length > 0 && (
               <div style={styles.tagsContainer}>
@@ -2769,5 +3186,211 @@ const styles = {
     fontSize: '10px',
     opacity: 0.7,
     letterSpacing: '1px'
+  },
+  tagFilters: {
+    marginTop: '12px',
+    padding: '16px',
+    background: 'rgba(0,0,0,0.25)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px'
+  },
+  tagFilterSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px'
+  },
+  tagChips: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap'
+  },
+  tagChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '5px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '16px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 500,
+    transition: 'all 0.2s'
+  },
+  tagChipActive: {
+    background: 'rgba(255,51,102,0.15)',
+    borderColor: 'rgba(255,51,102,0.4)',
+    color: '#ff3366'
+  },
+  recommendationSection: {
+    marginBottom: '24px',
+    padding: '16px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.08), rgba(204,102,255,0.06))',
+    border: '1px solid rgba(255,51,102,0.15)',
+    borderRadius: '16px',
+    position: 'relative',
+    overflow: 'hidden'
+  },
+  recommendationHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '14px'
+  },
+  recommendationHeaderRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px'
+  },
+  preferenceHint: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    fontStyle: 'italic'
+  },
+  refreshRecBtn: {
+    padding: '6px 12px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: '11px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  recommendationGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '10px'
+  },
+  recommendationCard: {
+    background: 'rgba(0,0,0,0.4)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease'
+  },
+  recCardCover: {
+    height: '70px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative'
+  },
+  recRankBadge: {
+    position: 'absolute',
+    top: '8px',
+    left: '8px',
+    padding: '2px 8px',
+    background: 'rgba(0,0,0,0.6)',
+    borderRadius: '10px',
+    fontSize: '11px',
+    fontWeight: 800,
+    color: '#ffcc00',
+    fontFamily: 'monospace'
+  },
+  recCardCoverIcon: {
+    fontSize: '28px',
+    color: 'rgba(255,255,255,0.8)'
+  },
+  recCardContent: {
+    padding: '10px 12px'
+  },
+  recCardTitle: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#fff',
+    marginBottom: '2px',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  recCardArtist: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    marginBottom: '8px'
+  },
+  recReasons: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginBottom: '8px'
+  },
+  recReasonBadge: {
+    padding: '2px 6px',
+    background: 'rgba(255,51,102,0.1)',
+    borderRadius: '6px',
+    fontSize: '9px',
+    color: 'rgba(255,51,102,0.8)',
+    fontWeight: 500
+  },
+  recCardTags: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px'
+  },
+  recCardTag: {
+    padding: '2px 6px',
+    border: '1px solid',
+    borderRadius: '6px',
+    fontSize: '9px',
+    fontWeight: 500
+  },
+  cardTagsRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    marginTop: '6px'
+  },
+  cardTag: {
+    padding: '2px 6px',
+    border: '1px solid',
+    borderRadius: '6px',
+    fontSize: '10px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  structuredTagsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    marginBottom: '16px',
+    padding: '14px 16px',
+    background: 'rgba(0,0,0,0.2)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '12px'
+  },
+  tagGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  tagGroupLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '1px'
+  },
+  tagGroupTags: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px'
+  },
+  structuredTag: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '4px 10px',
+    border: '1px solid',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 0.2s'
   }
 }

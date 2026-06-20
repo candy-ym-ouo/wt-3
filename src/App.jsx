@@ -79,7 +79,8 @@ export default function App() {
     getChallengeSummary,
     getActiveMultiplier,
     challengeData,
-    bestRecords
+    bestRecords,
+    playHistory
   } = playerStore
 
   const challengeSummary = useMemo(() => getChallengeSummary(), [challengeData, getChallengeSummary])
@@ -368,6 +369,7 @@ export default function App() {
           onOpenDailyChallenge={() => setShowDailyChallenge(true)}
           onOpenStoryMode={() => setShowStoryMode(true)}
           onOpenImporter={() => setShowImporter(true)}
+          playHistory={playHistory}
         />
       )}
       {screen === 'settings' && (
