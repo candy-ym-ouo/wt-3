@@ -57,6 +57,7 @@ export default function App() {
   const [showImporter, setShowImporter] = useState(false)
   const [currentMissions, setCurrentMissions] = useState(null)
   const [missionResult, setMissionResult] = useState(null)
+  const [isPrepMode, setIsPrepMode] = useState(false)
 
   const calibrationStore = useCalibrationStore()
   const storyStore = useStoryStore()
@@ -105,6 +106,7 @@ export default function App() {
 
   const handleSelectTrack = (track) => {
     clearTutorialState()
+    setIsPrepMode(false)
     const missions = generateMissions(track, 3)
     setCurrentMissions(missions)
     setMissionResult(null)
@@ -116,6 +118,16 @@ export default function App() {
     setIsTutorialGame(false)
     setShowTutorialComplete(false)
   }, [])
+
+  const handleStartPrepMode = useCallback((track) => {
+    clearTutorialState()
+    setIsPrepMode(true)
+    const missions = generateMissions(track, 3)
+    setCurrentMissions(missions)
+    setMissionResult(null)
+    setSelectedTrack(track)
+    setScreen('game')
+  }, [clearTutorialState])
 
   const handleStartDailyChallenge = useCallback(() => {
     const state = dailyChallengeStore.dailyChallengeState
@@ -249,6 +261,7 @@ export default function App() {
     setIsDailyChallengeMode(false)
     setDailyChallengeModifiers(null)
     setDailyChallengeResult(null)
+    setIsPrepMode(false)
     setScreen('select')
     playerStore.clearNewlyUnlocked()
   }
@@ -381,6 +394,7 @@ export default function App() {
           onOpenEditor={() => handleOpenEditor(null)}
           onEditTrack={handleOpenEditor}
           onOpenPracticeLab={handleOpenPracticeLab}
+          onStartPrepMode={handleStartPrepMode}
           keyConfig={themedKeyConfig}
           playerData={playerStore.playerData}
           expProgress={playerStore.expProgress}
@@ -440,6 +454,7 @@ export default function App() {
           }}
           isPracticeMode={practiceSection !== null}
           practiceSection={practiceSection}
+          isPrepMode={isPrepMode}
           isTutorialMode={isTutorialGame}
           isDailyChallengeMode={isDailyChallengeMode}
           dailyChallengeModifiers={dailyChallengeModifiers}
@@ -489,6 +504,7 @@ export default function App() {
           allDifficultyLeaderboards={playerStore.getAllDifficultyLeaderboards()}
           overallDifficultyStats={playerStore.getOverallDifficultyStats()}
           missionResult={missionResult}
+          isPrepMode={isPrepMode}
         />
       )}
       {showGrowthCenter && (

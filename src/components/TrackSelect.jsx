@@ -17,6 +17,7 @@ export default function TrackSelect({
   onOpenEditor,
   onEditTrack,
   onOpenPracticeLab,
+  onStartPrepMode,
   keyConfig,
   playerData,
   expProgress,
@@ -1650,6 +1651,20 @@ export default function TrackSelect({
             </button>
 
             <button
+              style={styles.prepBtn}
+              onClick={() => {
+                const playable = getPlayableTrack()
+                if (playable && onStartPrepMode) {
+                  onStartPrepMode(playable)
+                }
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              🎵 预备模式
+            </button>
+
+            <button
               style={styles.editBtn}
               onClick={() => onEditTrack && onEditTrack(track)}
               onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
@@ -2835,6 +2850,21 @@ const styles = {
     transition: 'all 0.2s',
     marginBottom: '10px',
     boxShadow: '0 4px 20px rgba(102,153,255,0.3)'
+  },
+  prepBtn: {
+    width: '100%',
+    padding: '12px',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff9900 100%)',
+    border: 'none',
+    borderRadius: '10px',
+    color: '#1a1a2e',
+    fontSize: '13px',
+    fontWeight: 600,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    marginBottom: '10px',
+    boxShadow: '0 4px 20px rgba(255,204,0,0.3)'
   },
   editBtn: {
     width: '100%',

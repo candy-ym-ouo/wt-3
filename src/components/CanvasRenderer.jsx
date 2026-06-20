@@ -8,7 +8,9 @@ export default function CanvasRenderer({
   analyser,
   judgeFeedback,
   theme,
-  hiddenNotes = false
+  hiddenNotes = false,
+  isPrepMode = false,
+  firstSegmentEndTime = 0
 }) {
   const canvasRef = useRef(null)
   const animRef = useRef(null)
@@ -1102,6 +1104,137 @@ export default function CanvasRenderer({
       ctx.restore()
     }
 
+    const drawRhythmHints = (t, time) => {
+      if (!isPrepMode) return
+
+      const hitY = height * HIT_LINE_Y
+      const laneWidth = getLaneWidth()
+      const hintTimeWindow = 3.0
+      const lookAhead = time + hintTimeWindow
+
+      const upcomingNotes = gameDataRef.current.activeNotes.filter(n =>
+        !n.hit && !n.missed && n.time > time && n.time <= lookAhead
+      )
+
+      const laneMap = {}
+      for (let i = 0; i < LANE_COUNT; i++) laneMap[i] = []
+      upcomingNotes.forEach(note => {
+        if (laneMap[note.lane]) {
+          laneMap[note.lane].push(note)
+        }
+      })
+
+      for (let lane = 0; lane < LANE_COUNT; lane++) {
+        const x = getLaneX(lane)
+        const laneNotes = laneMap[lane]
+
+        laneNotes.forEach(note => {
+          const timeUntilHit = note.time - time
+          const progress = 1 - timeUntilHit / hintTimeWindow
+          if (progress < 0 || progress > 1) return
+
+          const hintY = hitY - (HIT_LINE_Y * height) * (1 - progress)
+          const alpha = 0.15 + progress * 0.25
+          const alphaHex = Math.floor(alpha * 255).toString(16).padStart(2, '0')
+          const color = keyConfig.colors[lane]
+
+          ctx.beginPath()
+          ctx.strokeStyle = `${color}${alphaHex}`
+          ctx.lineWidth = 1.5
+          const pulseR = 6 + Math.sin(t * 4 + note.time) * 2
+          ctx.arc(x, hintY, pulseR, 0, Math.PI * 2)
+          ctx.stroke()
+
+          if (progress > 0.6) {
+            const glowAlpha = (progress - 0.6) * 0.3
+            const glowAlphaHex = Math.floor(glowAlpha * 255).toString(16).padStart(2, '0')
+            const glowGrad = ctx.createRadialGradient(x, hintY, 0, x, hintY, pulseR * 2)
+            glowGrad.addColorStop(0, `${color}${glowAlphaHex}`)
+            glowGrad.addColorStop(1, `${color}00`)
+            ctx.fillStyle = glowGrad
+            ctx.beginPath()
+            ctx.arc(x, hintY, pulseR * 2, 0, Math.PI * 2)
+            ctx.fill()
+          }
+        })
+
+        if (laneNotes.length > 0) {
+          const nextNote = laneNotes[0]
+          const timeUntilHit = nextNote.time - time
+          if (timeUntilHit < 1.5 && timeUntilHit > 0) {
+            const urgency = 1 - timeUntilHit / 1.5
+            const pressHintAlpha = urgency * 0.4
+            const pressHintAlphaHex = Math.floor(pressHintAlpha * 255).toString(16).padStart(2, '0')
+            const color = keyConfig.colors[lane]
+            const indicatorY = hitY + 50
+            ctx.fillStyle = `${color}${pressHintAlphaHex}`
+            ctx.beginPath()
+            const triSize = 8 + urgency * 6
+            ctx.moveTo(x, indicatorY - triSize)
+            ctx.lineTo(x - triSize * 0.7, indicatorY + triSize * 0.3)
+            ctx.lineTo(x + triSize * 0.7, indicatorY + triSize * 0.3)
+            ctx.closePath()
+            ctx.fill()
+          }
+        }
+      }
+    }
+
+    const drawFirstSegmentGuide = (t, time) => {
+      if (!isPrepMode || firstSegmentEndTime <= 0) return
+
+      const hitY = height * HIT_LINE_Y
+      const laneWidth = getLaneWidth()
+      const LANE_START_X = width * LANE_START
+      const LANE_END_X = width * LANE_END
+      const totalLaneWidth = LANE_END_X - LANE_START_X
+
+      const inFirstSegment = time < firstSegmentEndTime
+      const fadeAfterSegment = time >= firstSegmentEndTime && time < firstSegmentEndTime + 3
+      let segmentAlpha = 0
+      if (inFirstSegment) {
+        segmentAlpha = 0.25 + Math.sin(t * 2) * 0.08
+      } else if (fadeAfterSegment) {
+        segmentAlpha = 0.25 * (1 - (time - firstSegmentEndTime) / 3)
+      }
+      if (segmentAlpha <= 0) return
+
+      const alphaHex = Math.floor(segmentAlpha * 255).toString(16).padStart(2, '0')
+      ctx.fillStyle = `#ffcc00${alphaHex}`
+      ctx.fillRect(LANE_START_X - 10, 0, 3, hitY + 30)
+      ctx.fillRect(LANE_END_X + 7, 0, 3, hitY + 30)
+
+      const topBorderY = 50
+      const bottomBorderY = hitY - 20
+      const leftX = LANE_START_X - 10
+      const rightX = LANE_END_X + 10
+      ctx.strokeStyle = `#ffcc00${alphaHex}`
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([6, 4])
+      ctx.beginPath()
+      ctx.moveTo(leftX, topBorderY)
+      ctx.lineTo(leftX, bottomBorderY)
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.moveTo(rightX, topBorderY)
+      ctx.lineTo(rightX, bottomBorderY)
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      if (inFirstSegment) {
+        const labelAlpha = segmentAlpha + 0.1
+        const labelAlphaHex = Math.floor(Math.min(1, labelAlpha) * 255).toString(16).padStart(2, '0')
+        ctx.save()
+        ctx.translate(LANE_START_X - 30, hitY * 0.4)
+        ctx.rotate(-Math.PI / 2)
+        ctx.font = '600 11px -apple-system, sans-serif'
+        ctx.fillStyle = `#ffcc00${labelAlphaHex}`
+        ctx.textAlign = 'center'
+        ctx.fillText('首段引导', 0, 0)
+        ctx.restore()
+      }
+    }
+
     const render = () => {
       timeRef.current += 0.016
       const t = timeRef.current
@@ -1120,6 +1253,8 @@ export default function CanvasRenderer({
       drawWaveform(t, waveData)
       drawBottomWave(t, waveData)
       drawLanes(t, time)
+      drawRhythmHints(t, time)
+      drawFirstSegmentGuide(t, time)
       drawNotes(t, time)
       drawEffects(t, time)
       drawJudgeFeedback(t)
@@ -1132,7 +1267,7 @@ export default function CanvasRenderer({
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(animRef.current)
     }
-  }, [track, keyConfig, currentTime, analyser, judgeFeedback, gameDataRef, bgId, hitId])
+  }, [track, keyConfig, currentTime, analyser, judgeFeedback, gameDataRef, bgId, hitId, hiddenNotes, isPrepMode, firstSegmentEndTime])
 
   return (
     <canvas

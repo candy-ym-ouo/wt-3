@@ -44,7 +44,8 @@ export default function Result({
   trackAllLeaderboards,
   allDifficultyLeaderboards,
   overallDifficultyStats,
-  missionResult = null
+  missionResult = null,
+  isPrepMode = false
 }) {
   const resultStyle = theme?.resultStyleId || 'neon'
   const currentDiffInfo = getDifficultyInfo(track.difficulty)
@@ -490,6 +491,9 @@ export default function Result({
             )}
             {result.isPracticeMode && (
               <span style={styles.practiceBadge}>🧪 练习模式</span>
+            )}
+            {(result.isPrepMode || isPrepMode) && (
+              <span style={styles.prepBadge}>🎵 预备模式</span>
             )}
             {healthPolicy && (
               <span style={{
@@ -2270,6 +2274,17 @@ const styles = {
     background: 'rgba(0,255,204,0.12)',
     border: '1px solid rgba(0,255,204,0.3)',
     color: '#00ffcc',
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '1px'
+  },
+  prepBadge: {
+    display: 'inline-block',
+    padding: '6px 16px',
+    background: 'rgba(255,204,0,0.12)',
+    border: '1px solid rgba(255,204,0,0.3)',
+    color: '#ffcc00',
     borderRadius: '20px',
     fontSize: '11px',
     fontWeight: 600,

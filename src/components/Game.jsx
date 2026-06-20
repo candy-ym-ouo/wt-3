@@ -30,7 +30,7 @@ const JUDGE_RANK = {
   miss: 1
 }
 
-export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isTutorialMode = false, isDailyChallengeMode = false, dailyChallengeModifiers = null, theme, missions = null }) {
+export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode = false, practiceSection = null, isPrepMode = false, isTutorialMode = false, isDailyChallengeMode = false, dailyChallengeModifiers = null, theme, missions = null }) {
   const practiceStore = usePracticeStore()
   const { settings: practiceSettings } = practiceStore
   const calibrationStore = useCalibrationStore()
@@ -42,6 +42,9 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
   const tutorialPlaybackSpeed = isTutorialMode ? 0.6 : 1.0
   const tutorialJudgeMultiplier = isTutorialMode ? 1.5 : 1.0
+  const prepJudgeMultiplier = isPrepMode ? 1.3 : 1.0
+  const effectiveJudgeMultiplier = Math.max(tutorialJudgeMultiplier, prepJudgeMultiplier)
+  const prepHealthDamageReduction = isPrepMode ? 0.5 : 1.0
   const dailyChallengePlaybackSpeed = (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) ? dailyChallengeModifiers.playbackSpeed : 1.0
 
   const healthPolicy = getHealthPolicy(track.difficultyId || track.difficulty)
@@ -396,10 +399,10 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     let closestDiff = Infinity
 
     const adjustedJudgeWindows = {
-      perfect: JUDGE_WINDOWS.perfect * tutorialJudgeMultiplier,
-      great: JUDGE_WINDOWS.great * tutorialJudgeMultiplier,
-      good: JUDGE_WINDOWS.good * tutorialJudgeMultiplier,
-      miss: JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
+      perfect: JUDGE_WINDOWS.perfect * effectiveJudgeMultiplier,
+      great: JUDGE_WINDOWS.great * effectiveJudgeMultiplier,
+      good: JUDGE_WINDOWS.good * effectiveJudgeMultiplier,
+      miss: JUDGE_WINDOWS.miss * effectiveJudgeMultiplier
     }
 
     for (let i = 0; i < data.activeNotes.length; i++) {
@@ -452,12 +455,12 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     setStats({ ...statsRef.current })
 
     if (judgeType === 'miss') {
-      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss)
+      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss * prepHealthDamageReduction)
       if (isDailyChallengeMode && dailyChallengeModifiers?.suddenDeath) {
         healthRef.current = 0
       }
     } else if (judgeType === 'good') {
-      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.good)
+      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.good * prepHealthDamageReduction)
       healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.recover.good)
     } else if (judgeType === 'great') {
       healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.recover.great)
@@ -577,7 +580,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     }
 
     return judgeType
-  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, tutorialJudgeMultiplier, getFilteredNotes, isPracticeMode, isTutorialMode])
+  }, [keyConfig.colors, playHitSound, shouldReplayNote, addToReplayQueue, effectiveJudgeMultiplier, prepHealthDamageReduction, getFilteredNotes, isPracticeMode, isTutorialMode])
 
   const getFilteredNotes = useCallback(() => {
     const range = practiceRange()
@@ -627,6 +630,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       playedAt: new Date().toISOString(),
       playbackSpeed: currentPlaybackSpeed,
       isPracticeMode,
+      isPrepMode,
       keyEvents: replayDataRef.current.keyEvents,
       judgeEvents: replayDataRef.current.judgeEvents,
       scoreHistory: replayDataRef.current.scoreHistory,
@@ -657,6 +661,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       cleared: healthRef.current > healthPolicy.failThreshold,
       healthPolicy: healthPolicy,
       isPracticeMode,
+      isPrepMode,
       playbackSpeed: currentPlaybackSpeed,
       replayData,
       judgmentOffsetMs: finalJudgmentOffsetMs,
@@ -679,7 +684,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     setTimeout(() => {
       onEnd(result, finalMissions)
     }, 300)
-  }, [getFilteredNotes, onEnd, isPracticeMode, currentPlaybackSpeed, track, applyAndSaveOffset, initialJudgmentOffsetMs, isTutorialMode])
+  }, [getFilteredNotes, onEnd, isPracticeMode, isPrepMode, currentPlaybackSpeed, track, applyAndSaveOffset, initialJudgmentOffsetMs, isTutorialMode])
 
   const jumpToSection = useCallback((startBar, endBar) => {
     const startTime = startBar * barDuration
@@ -896,7 +901,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
 
         const activeData = gameDataRef.current
 
-        const adjustedMissWindow = JUDGE_WINDOWS.miss * tutorialJudgeMultiplier
+        const adjustedMissWindow = JUDGE_WINDOWS.miss * effectiveJudgeMultiplier
         activeData.activeNotes.forEach(note => {
           if (!note.hit && !note.missed && note.time + judgmentOffsetSecRef.current + adjustedMissWindow < now) {
             note.missed = true
@@ -905,7 +910,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             setCombo(0)
             statsRef.current.miss += 1
             setStats({ ...statsRef.current })
-            healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss)
+            healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss * prepHealthDamageReduction)
             setHealth(healthRef.current)
 
             if (shouldReplayNote('miss')) {
@@ -1224,6 +1229,8 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         practiceRange={range}
         theme={theme}
         hiddenNotes={isDailyChallengeMode && dailyChallengeModifiers?.hiddenNotes}
+        isPrepMode={isPrepMode}
+        firstSegmentEndTime={isPrepMode ? Math.min(barDuration * 4, track.duration) : 0}
       />
 
       <ScorePanel
@@ -1299,6 +1306,15 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         </div>
       )}
 
+      {isPrepMode && (
+        <div style={styles.prepIndicator}>
+          <span style={styles.prepIcon}>🎵</span>
+          <span style={styles.prepText}>预备模式</span>
+          <span style={styles.prepJudgeBadge}>判定窗口 +30%</span>
+          <span style={styles.prepDamageBadge}>伤害 -50%</span>
+        </div>
+      )}
+
       {missionToast && (
         <div
           key={missionToast.id}
@@ -1368,6 +1384,60 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         <div style={styles.tutorialHint}>
           <span style={styles.tutorialHintText}>
             💡 当音符到达判定线时，按下对应按键！
+          </span>
+        </div>
+      )}
+
+      {isPrepMode && gameState === 'ready' && (
+        <div style={styles.prepReadyOverlay}>
+          <div style={styles.prepReadyContent}>
+            <div style={styles.prepReadyIcon}>🎵</div>
+            <h2 style={styles.prepReadyTitle}>预备模式</h2>
+            <p style={styles.prepReadyDesc}>
+              节奏提示引导 · 首段重点标记 · 判定与伤害弱化
+            </p>
+            <div style={styles.prepReadyFeatures}>
+              <div style={styles.prepReadyFeatureItem}>
+                <span style={styles.prepReadyFeatureIcon}>🎯</span>
+                <span style={styles.prepReadyFeatureText}>判定窗口放宽 30%</span>
+              </div>
+              <div style={styles.prepReadyFeatureItem}>
+                <span style={styles.prepReadyFeatureIcon}>🛡️</span>
+                <span style={styles.prepReadyFeatureText}>MISS 伤害降低 50%</span>
+              </div>
+              <div style={styles.prepReadyFeatureItem}>
+                <span style={styles.prepReadyFeatureIcon}>💡</span>
+                <span style={styles.prepReadyFeatureText}>节奏提示与首段引导</span>
+              </div>
+            </div>
+            <div style={styles.tutorialKeyHints}>
+              {keyConfig.labels.map((label, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...styles.tutorialKeyHint,
+                    borderColor: keyConfig.colors[i],
+                    color: keyConfig.colors[i]
+                  }}
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+            <button
+              style={styles.prepStartBtn}
+              onClick={handleStartClick}
+            >
+              ▶ 开始预备
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isPrepMode && gameState === 'playing' && (
+        <div style={styles.prepHint}>
+          <span style={styles.prepHintText}>
+            🎵 预备模式 · 节奏提示已开启 · 判定弱化中
           </span>
         </div>
       )}
@@ -2050,6 +2120,140 @@ const styles = {
     fontSize: '12px',
     fontWeight: 700,
     color: '#ffcc00'
+  },
+
+  prepIndicator: {
+    position: 'absolute',
+    top: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 20px',
+    background: 'linear-gradient(135deg, rgba(255,204,0,0.2), rgba(255,153,0,0.15))',
+    border: '1px solid rgba(255,204,0,0.4)',
+    borderRadius: '12px',
+    zIndex: 20,
+    backdropFilter: 'blur(10px)'
+  },
+  prepIcon: {
+    fontSize: '20px'
+  },
+  prepText: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#ffcc00',
+    letterSpacing: '1px'
+  },
+  prepJudgeBadge: {
+    padding: '4px 10px',
+    background: 'rgba(102,153,255,0.15)',
+    border: '1px solid rgba(102,153,255,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#6699ff',
+    fontWeight: 600
+  },
+  prepDamageBadge: {
+    padding: '4px 10px',
+    background: 'rgba(0,255,204,0.15)',
+    border: '1px solid rgba(0,255,204,0.3)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: '#00ffcc',
+    fontWeight: 600
+  },
+  prepReadyOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(5,5,8,0.9)',
+    zIndex: 60,
+    backdropFilter: 'blur(15px)'
+  },
+  prepReadyContent: {
+    textAlign: 'center',
+    padding: '48px 60px',
+    background: 'linear-gradient(135deg, rgba(15,15,30,0.98), rgba(10,10,20,0.95))',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '24px',
+    boxShadow: '0 20px 80px rgba(255,204,0,0.15)'
+  },
+  prepReadyIcon: {
+    fontSize: '64px',
+    marginBottom: '16px',
+    animation: 'bounce 1s ease-in-out infinite'
+  },
+  prepReadyTitle: {
+    fontSize: '28px',
+    fontWeight: 800,
+    letterSpacing: '4px',
+    margin: '0 0 12px 0',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff9900 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent'
+  },
+  prepReadyDesc: {
+    fontSize: '14px',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: '24px'
+  },
+  prepReadyFeatures: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginBottom: '24px'
+  },
+  prepReadyFeatureItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    justifyContent: 'center',
+    padding: '8px 16px',
+    background: 'rgba(255,255,255,0.05)',
+    borderRadius: '8px',
+    border: '1px solid rgba(255,255,255,0.1)'
+  },
+  prepReadyFeatureIcon: {
+    fontSize: '18px'
+  },
+  prepReadyFeatureText: {
+    fontSize: '13px',
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: 600
+  },
+  prepStartBtn: {
+    padding: '16px 48px',
+    background: 'linear-gradient(135deg, #ffcc00 0%, #ff9900 100%)',
+    border: 'none',
+    borderRadius: '12px',
+    color: '#332200',
+    fontSize: '16px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    cursor: 'pointer',
+    boxShadow: '0 8px 30px rgba(255,204,0,0.4)',
+    transition: 'all 0.2s'
+  },
+  prepHint: {
+    position: 'absolute',
+    bottom: '120px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 15
+  },
+  prepHintText: {
+    padding: '10px 20px',
+    background: 'rgba(0,0,0,0.7)',
+    border: '1px solid rgba(255,204,0,0.3)',
+    borderRadius: '20px',
+    fontSize: '13px',
+    color: '#ffcc00',
+    backdropFilter: 'blur(10px)',
+    animation: 'pulse 2s ease-in-out infinite'
   }
 }
 
