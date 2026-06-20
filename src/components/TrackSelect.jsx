@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { TITLES, RANK_COLORS } from '../data/growthData.js'
-import { TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty } from '../data/tracks.js'
+import {
+  TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty,
+  sortDifficulties, getTrackDifficultyStats, getTrackDifficultySummary,
+  getDifficultyInfo, getDifficultyColor, getDifficultyName, normalizeDifficultyId,
+  makeRecordKey
+} from '../data/tracks.js'
 
 export default function TrackSelect({
   tracks,
@@ -68,8 +73,10 @@ export default function TrackSelect({
   const getMatchingDifficulty = useCallback((track) => {
     if (!track.difficulties || track.difficulties.length === 0) return null
 
-    const matchingDiffs = track.difficulties.filter(d => {
-      if (filterDifficulty !== 'all' && d.id !== filterDifficulty) return false
+    const sortedDiffs = sortDifficulties(track.difficulties)
+
+    const matchingDiffs = sortedDiffs.filter(d => {
+      if (filterDifficulty !== 'all' && normalizeDifficultyId(d.id) !== filterDifficulty) return false
       if (d.level < levelRange.min || d.level > levelRange.max) return false
       const noteCount = d.totalNotes || 0
       if (noteCount < noteCountRange.min || noteCount > noteCountRange.max) return false
@@ -164,12 +171,16 @@ export default function TrackSelect({
   const tracksWithMatchingDifficulty = useMemo(() => {
     return [...tracks].map(track => {
       const matchingDiff = getMatchingDifficulty(track)
+      const diffStats = getTrackDifficultyStats(track, getBestRecord)
+      const diffSummary = getTrackDifficultySummary(track, getBestRecord)
       return {
         ...track,
-        matchingDifficulty: matchingDiff
+        matchingDifficulty: matchingDiff,
+        difficultyStats: diffStats,
+        difficultySummary: diffSummary
       }
     })
-  }, [tracks, getMatchingDifficulty])
+  }, [tracks, getMatchingDifficulty, getBestRecord])
 
   const filteredTracks = useMemo(() => {
     let result = [...tracksWithMatchingDifficulty]
@@ -814,6 +825,8 @@ export default function TrackSelect({
                 const best = getBestRecord ? getBestRecord(t.id) : null
                 const unlockCheck = checkUnlockCondition(t.unlockCondition, playerData, bestRecords)
                 const matchingDiff = t.matchingDifficulty
+                const sortedDiffs = sortDifficulties(t.difficulties || [])
+                const diffSummary = t.difficultySummary
                 return (
                   <div
                     key={t.id}
@@ -843,6 +856,20 @@ export default function TrackSelect({
                         }}
                       >
                         <span style={styles.trackCardCoverIcon}>♪</span>
+                        {diffSummary && diffSummary.total > 0 && (
+                          <div style={styles.cardCoverProgress}>
+                            <div style={styles.cardCoverProgressText}>
+                              {diffSummary.progressText}
+                            </div>
+                            <div style={styles.cardCoverProgressBarBg}>
+                              <div style={{
+                                ...styles.cardCoverProgressBar,
+                                width: `${diffSummary.progress}%`,
+                                background: diffSummary.statusColor
+                              }} />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div style={styles.trackCardContent}>
@@ -855,6 +882,18 @@ export default function TrackSelect({
                         <div style={styles.trackTitleRow}>
                           <div style={styles.trackTitle}>{t.title}</div>
                           {!unlockCheck.unlocked && <span style={styles.lockIconSmall}>🔒</span>}
+                          {diffSummary && diffSummary.total > 0 && (
+                            <span
+                              style={{
+                                ...styles.cardClearBadge,
+                                borderColor: diffSummary.statusColor,
+                                color: diffSummary.statusColor,
+                                background: diffSummary.statusColor + '15'
+                              }}
+                            >
+                              {diffSummary.statusBadge} {diffSummary.progressText}
+                            </span>
+                          )}
                         </div>
                         <div style={styles.trackArtist}>{t.artist}</div>
                         {t.genre && (
@@ -872,30 +911,60 @@ export default function TrackSelect({
                       </div>
                       <div style={styles.trackMeta}>
                         <div style={styles.difficultyList}>
-                          {t.difficulties?.slice(0, viewMode === 'grid' ? 2 : 4).map(d => {
-                            const isMatching = matchingDiff && d.id === matchingDiff.id
+                          {(viewMode === 'grid' ? sortedDiffs.slice(0, 2) : sortedDiffs).map(d => {
+                            const isMatching = matchingDiff && normalizeDifficultyId(d.id) === normalizeDifficultyId(matchingDiff.id)
+                            const diffRec = getBestRecord ? getBestRecord(t.id, d.id) : null
+                            const isCleared = diffRec?.cleared
                             return (
-                              <span
+                              <div
                                 key={d.id}
                                 style={{
-                                  ...styles.difficultyDot,
-                                  backgroundColor: isMatching ? d.color + '66' : d.color + '33',
-                                  borderColor: d.color,
-                                  boxShadow: isMatching ? `0 0 8px ${d.color}88` : 'none',
-                                  transform: isMatching ? 'scale(1.1)' : 'scale(1)',
-                                  fontWeight: isMatching ? 800 : 700
+                                  position: 'relative'
                                 }}
-                                title={`${d.name} Lv.${d.level}${isMatching ? ' ✓ 匹配筛选' : ''}`}
                               >
-                                {isMatching && '✓ '}Lv.{d.level}
-                              </span>
+                                <span
+                                  style={{
+                                    ...styles.difficultyDot,
+                                    backgroundColor: isMatching ? d.color + '66' : (isCleared ? d.color + '44' : d.color + '22'),
+                                    borderColor: d.color,
+                                    boxShadow: isMatching ? `0 0 8px ${d.color}88` : (isCleared ? `0 0 4px ${d.color}44` : 'none'),
+                                    transform: isMatching ? 'scale(1.1)' : 'scale(1)',
+                                    fontWeight: isMatching ? 800 : 700
+                                  }}
+                                  title={`${d.name} Lv.${d.level}${isCleared ? ` ✓ ${diffRec.score.toLocaleString()}` : ''}${isMatching ? ' ✓ 匹配筛选' : ''}`}
+                                >
+                                  {isCleared && !isMatching && '✓'}
+                                  {isMatching && '★ '}
+                                  Lv.{d.level}
+                                </span>
+                                {isCleared && viewMode === 'list' && diffRec && (
+                                  <span style={{
+                                    ...styles.diffMiniScore,
+                                    color: RANK_COLORS[diffRec.rank] || '#fff',
+                                    borderColor: RANK_COLORS[diffRec.rank] || '#fff'
+                                  }}>
+                                    {diffRec.rank}
+                                  </span>
+                                )}
+                              </div>
                             )
                           })}
                         </div>
                         {viewMode === 'list' && (
-                          <span style={styles.bpmBadge}>
-                            {t.bpm} BPM
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                            <span style={styles.bpmBadge}>
+                              {t.bpm} BPM
+                            </span>
+                            {diffSummary && diffSummary.total > 1 && viewMode === 'list' && (
+                              <div style={styles.cardMiniProgress}>
+                                <div style={{
+                                  ...styles.cardMiniProgressFill,
+                                  width: `${diffSummary.progress}%`,
+                                  background: diffSummary.statusColor
+                                }} />
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -956,28 +1025,89 @@ export default function TrackSelect({
             <div style={styles.previewTitle}>{track.title}</div>
             <div style={styles.previewArtist}>{track.artist}</div>
 
-            {track.difficulties?.length > 1 && (
+            {track.difficultyStats && track.difficultyStats.total > 0 && (
+              <div style={styles.previewDifficultyProgress}>
+                <div style={styles.diffProgressHeader}>
+                  <span style={styles.diffProgressLabel}>
+                    难度进度
+                  </span>
+                  <span style={{
+                    ...styles.diffProgressBadge,
+                    color: track.difficultySummary.statusColor,
+                    borderColor: track.difficultySummary.statusColor
+                  }}>
+                    {track.difficultySummary.statusBadge}
+                  </span>
+                  <span style={styles.diffProgressCount}>
+                    {track.difficultySummary.progressText}
+                  </span>
+                </div>
+                <div style={styles.diffProgressBarBg}>
+                  <div style={{
+                    ...styles.diffProgressBar,
+                    width: `${track.difficultyStats.progress}%`,
+                    background: `linear-gradient(90deg, ${track.difficultySummary.statusColor}, ${track.difficultySummary.statusColor}aa)`
+                  }} />
+                </div>
+                <div style={styles.diffProgressCleared}>
+                  已通关: {track.difficultySummary.clearedText}
+                </div>
+              </div>
+            )}
+
+            {track.difficulties?.length >= 1 && (
               <div style={styles.difficultySelector}>
                 <span style={styles.diffSelectorLabel}>选择难度:</span>
                 <div style={styles.diffSelectorButtons}>
-                  {track.difficulties.map(diff => (
-                    <button
-                      key={diff.id}
-                      style={{
-                        ...styles.diffSelectorBtn,
-                        borderColor: diff.color,
-                        ...(selectedDifficultyId === diff.id ? {
-                          backgroundColor: diff.color + '33',
-                          color: diff.color,
-                          boxShadow: `0 0 15px ${diff.color}44`
-                        } : {})
-                      }}
-                      onClick={() => setSelectedDifficultyId(diff.id)}
-                    >
-                      <span style={styles.diffSelectorBtnName}>{diff.name}</span>
-                      <span style={styles.diffSelectorBtnLevel}>Lv.{diff.level}</span>
-                    </button>
-                  ))}
+                  {sortDifficulties(track.difficulties).map(diff => {
+                    const diffRecord = getBestRecord ? getBestRecord(track.id, diff.id) : null
+                    const isSelected = normalizeDifficultyId(selectedDifficultyId) === normalizeDifficultyId(diff.id)
+                    return (
+                      <button
+                        key={diff.id}
+                        style={{
+                          ...styles.diffSelectorBtn,
+                          borderColor: diff.color,
+                          ...(isSelected ? {
+                            backgroundColor: diff.color + '33',
+                            color: diff.color,
+                            boxShadow: `0 0 15px ${diff.color}44`
+                          } : (diffRecord?.cleared ? {
+                            backgroundColor: diff.color + '18',
+                            borderColor: diff.color + '88'
+                          } : {}))
+                        }}
+                        onClick={() => setSelectedDifficultyId(diff.id)}
+                        title={diffRecord?.cleared
+                          ? `最佳: ${diffRecord.score.toLocaleString()} [${diffRecord.rank}] ${diffRecord.accuracy.toFixed(2)}%`
+                          : `${diff.name} Lv.${diff.level}`
+                        }
+                      >
+                        <div style={styles.diffSelectorBtnTop}>
+                          <span style={styles.diffSelectorBtnName}>{diff.name}</span>
+                          {diffRecord?.cleared && (
+                            <span style={{
+                              ...styles.diffSelectorBtnRank,
+                              color: RANK_COLORS[diffRecord.rank] || '#fff'
+                            }}>
+                              {diffRecord.rank}
+                            </span>
+                          )}
+                        </div>
+                        <span style={styles.diffSelectorBtnLevel}>Lv.{diff.level}</span>
+                        {diffRecord?.cleared && (
+                          <span style={styles.diffSelectorBtnScore}>
+                            {(diffRecord.score / 10000).toFixed(1)}万
+                          </span>
+                        )}
+                        {!diffRecord?.cleared && (
+                          <span style={styles.diffSelectorBtnScore}>
+                            {diff.totalNotes || 0} 音符
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -2245,5 +2375,137 @@ const styles = {
   dailyChallengeBannerArrow: {
     fontSize: '18px',
     color: 'rgba(255,153,0,0.6)'
+  },
+  cardClearBadge: {
+    padding: '2px 8px',
+    border: '1px solid',
+    borderRadius: '10px',
+    fontSize: '10px',
+    fontWeight: 700,
+    marginLeft: '8px',
+    letterSpacing: '1px'
+  },
+  cardCoverProgress: {
+    position: 'absolute',
+    left: '10px',
+    right: '10px',
+    bottom: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  cardCoverProgressText: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#fff',
+    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+    letterSpacing: '1px'
+  },
+  cardCoverProgressBarBg: {
+    height: '4px',
+    background: 'rgba(0,0,0,0.5)',
+    borderRadius: '2px',
+    overflow: 'hidden'
+  },
+  cardCoverProgressBar: {
+    height: '100%',
+    borderRadius: '2px',
+    transition: 'width 0.5s ease-out'
+  },
+  cardMiniProgress: {
+    width: '60px',
+    height: '3px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '2px',
+    overflow: 'hidden'
+  },
+  cardMiniProgressFill: {
+    height: '100%',
+    borderRadius: '2px',
+    transition: 'width 0.5s ease-out'
+  },
+  diffMiniScore: {
+    position: 'absolute',
+    top: '-8px',
+    right: '-8px',
+    fontSize: '9px',
+    fontWeight: 800,
+    padding: '1px 5px',
+    borderRadius: '8px',
+    border: '1px solid',
+    background: 'rgba(10,10,20,0.95)',
+    backdropFilter: 'blur(4px)',
+    zIndex: 2,
+    minWidth: '18px',
+    textAlign: 'center'
+  },
+  previewDifficultyProgress: {
+    padding: '14px 16px',
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '12px',
+    marginBottom: '16px'
+  },
+  diffProgressHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '10px'
+  },
+  diffProgressLabel: {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: '2px'
+  },
+  diffProgressBadge: {
+    padding: '3px 10px',
+    border: '1px solid',
+    borderRadius: '12px',
+    fontSize: '10px',
+    fontWeight: 800,
+    letterSpacing: '1px',
+    background: 'rgba(0,0,0,0.3)'
+  },
+  diffProgressCount: {
+    fontSize: '12px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.5)',
+    marginLeft: 'auto',
+    fontFamily: 'monospace'
+  },
+  diffProgressBarBg: {
+    height: '8px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    marginBottom: '8px'
+  },
+  diffProgressBar: {
+    height: '100%',
+    borderRadius: '4px',
+    transition: 'width 0.6s ease-out',
+    boxShadow: '0 0 12px rgba(255,255,255,0.15)'
+  },
+  diffProgressCleared: {
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.4)',
+    fontStyle: 'italic'
+  },
+  diffSelectorBtnTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    justifyContent: 'center'
+  },
+  diffSelectorBtnRank: {
+    fontSize: '11px',
+    fontWeight: 900,
+    fontFamily: 'monospace'
+  },
+  diffSelectorBtnScore: {
+    fontSize: '10px',
+    opacity: 0.7,
+    letterSpacing: '1px'
   }
 }

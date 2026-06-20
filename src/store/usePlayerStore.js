@@ -27,12 +27,24 @@ import {
   EVENT_ACHIEVEMENTS,
   EVENT_BADGES
 } from '../data/challengeData.js'
+import {
+  DIFFICULTIES,
+  DIFFICULTY_ORDER,
+  getDifficultyInfo,
+  normalizeDifficultyId,
+  sortDifficulties
+} from '../data/tracks.js'
 
 const DIFFICULTY_MAP = {
   'easy': '简单', '简单': 'easy',
   'normal': '普通', '普通': 'normal',
   'hard': '困难', '困难': 'hard',
   'expert': '专家', '专家': 'expert'
+}
+
+const generateRecordKey = (trackId, difficulty) => {
+  const normalizedDiff = normalizeDifficultyId(difficulty)
+  return `${trackId}_${normalizedDiff}`
 }
 
 const STORAGE_KEY = 'rhythm_circle_player_data'
@@ -241,7 +253,8 @@ export function usePlayerStore() {
 
     exp += EXP_RANK_BONUS[result.rank] || 0
 
-    const difficultyWeight = DIFFICULTY_WEIGHT[track.difficulty] || 1.0
+    const normalizedDiff = normalizeDifficultyId(track.difficulty)
+    const difficultyWeight = DIFFICULTY_WEIGHT[track.difficulty] || DIFFICULTY_WEIGHT[normalizedDiff] || 1.0
     exp = Math.floor(exp * difficultyWeight)
 
     return exp
@@ -286,7 +299,7 @@ export function usePlayerStore() {
   const checkIsNewRecord = useCallback((result, track) => {
     if (!result.cleared) return { isNewBest: false, isNewAccuracy: false, isNewCombo: false }
     
-    const recordKey = `${track.id}_${track.difficulty}`
+    const recordKey = generateRecordKey(track.id, track.difficulty)
     const existing = bestRecords[recordKey]
     
     if (!existing) {
@@ -303,7 +316,9 @@ export function usePlayerStore() {
   const updateBestRecord = useCallback((result, track) => {
     if (!result.cleared) return { isNewBest: false, isNewAccuracy: false, isNewCombo: false }
     
-    const recordKey = `${track.id}_${track.difficulty}`
+    const normalizedDiff = normalizeDifficultyId(track.difficulty)
+    const diffInfo = getDifficultyInfo(track.difficulty)
+    const recordKey = generateRecordKey(track.id, track.difficulty)
     const existing = bestRecords[recordKey]
     
     const checks = checkIsNewRecord(result, track)
@@ -314,6 +329,9 @@ export function usePlayerStore() {
         trackId: track.id,
         trackTitle: track.title,
         difficulty: track.difficulty,
+        normalizedDifficulty: normalizedDiff,
+        difficultyName: diffInfo?.name || track.difficulty,
+        difficultyColor: diffInfo?.color || '#888',
         level: track.level,
         artist: track.artist,
         score: existing && !checks.isNewBest ? existing.score : result.score,
@@ -341,11 +359,16 @@ export function usePlayerStore() {
   }, [bestRecords, checkIsNewRecord])
 
   const addToHistory = useCallback((result, track) => {
+    const normalizedDiff = normalizeDifficultyId(track.difficulty)
+    const diffInfo = getDifficultyInfo(track.difficulty)
     const historyEntry = {
       id: Date.now() + Math.random(),
       trackId: track.id,
       trackTitle: track.title,
       difficulty: track.difficulty,
+      normalizedDifficulty: normalizedDiff,
+      difficultyName: diffInfo?.name || track.difficulty,
+      difficultyColor: diffInfo?.color || '#888',
       level: track.level,
       artist: track.artist,
       score: result.score,
@@ -364,7 +387,7 @@ export function usePlayerStore() {
       let updated = [historyEntry, ...prev]
       const trackCount = {}
       updated = updated.filter(h => {
-        const key = `${h.trackId}_${h.difficulty}`
+        const key = generateRecordKey(h.trackId, h.difficulty)
         trackCount[key] = (trackCount[key] || 0) + 1
         return trackCount[key] <= MAX_HISTORY_PER_TRACK
       })
@@ -374,15 +397,16 @@ export function usePlayerStore() {
     if (result.replayData) {
       const replayEntry = {
         ...result.replayData,
+        normalizedDifficulty: normalizedDiff,
         score: result.score,
         rank: result.rank,
         accuracy: result.accuracy,
         maxCombo: result.maxCombo
       }
       setReplays(prev => {
-        const trackKey = `${track.id}_${track.difficulty}`
-        const filtered = prev.filter(r => `${r.trackId}_${r.difficulty}` === trackKey)
-        const others = prev.filter(r => `${r.trackId}_${r.difficulty}` !== trackKey)
+        const trackKey = generateRecordKey(track.id, track.difficulty)
+        const filtered = prev.filter(r => generateRecordKey(r.trackId, r.difficulty) === trackKey)
+        const others = prev.filter(r => generateRecordKey(r.trackId, r.difficulty) !== trackKey)
         const updated = [replayEntry, ...filtered].slice(0, MAX_REPLAYS_PER_TRACK)
         return [...updated, ...others]
       })
@@ -716,7 +740,9 @@ export function usePlayerStore() {
     const recordChecks = updateBestRecord(result, track)
     addToHistory(result, track)
 
-    const recordKey = `${track.id}_${track.difficulty}`
+    const normalizedDiff = normalizeDifficultyId(track.difficulty)
+    const diffInfo = getDifficultyInfo(track.difficulty)
+    const recordKey = generateRecordKey(track.id, track.difficulty)
     let updatedBestRecords = { ...bestRecords }
     if (result.cleared) {
       const existing = bestRecords[recordKey]
@@ -728,6 +754,9 @@ export function usePlayerStore() {
             trackId: track.id,
             trackTitle: track.title,
             difficulty: track.difficulty,
+            normalizedDifficulty: normalizedDiff,
+            difficultyName: diffInfo?.name || track.difficulty,
+            difficultyColor: diffInfo?.color || '#888',
             level: track.level,
             artist: track.artist,
             score: existing && !recordChecks.isNewBest ? existing.score : result.score,
@@ -748,6 +777,9 @@ export function usePlayerStore() {
       trackId: track.id,
       trackTitle: track.title,
       difficulty: track.difficulty,
+      normalizedDifficulty: normalizedDiff,
+      difficultyName: diffInfo?.name || track.difficulty,
+      difficultyColor: diffInfo?.color || '#888',
       level: track.level,
       score: result.score,
       rank: result.rank,
@@ -818,10 +850,13 @@ export function usePlayerStore() {
 
   const getBestRecord = useCallback((trackId, difficulty = null) => {
     if (difficulty) {
+      const normalizedDiff = normalizeDifficultyId(difficulty)
+      const recordKey = generateRecordKey(trackId, difficulty)
+      const normalizedKey = `${trackId}_${normalizedDiff}`
       const altDifficulty = DIFFICULTY_MAP[difficulty] || difficulty
-      const recordKey1 = `${trackId}_${difficulty}`
-      const recordKey2 = `${trackId}_${altDifficulty}`
-      return bestRecords[recordKey1] || bestRecords[recordKey2] || null
+      const oldKey1 = `${trackId}_${difficulty}`
+      const oldKey2 = `${trackId}_${altDifficulty}`
+      return bestRecords[recordKey] || bestRecords[normalizedKey] || bestRecords[oldKey1] || bestRecords[oldKey2] || null
     }
     const records = Object.values(bestRecords).filter(r => r.trackId === trackId)
     if (records.length === 0) return null
@@ -830,17 +865,67 @@ export function usePlayerStore() {
     )
   }, [bestRecords])
 
+  const getTrackAllBestRecords = useCallback((trackId) => {
+    const records = Object.values(bestRecords).filter(r => r.trackId === trackId)
+    const byDifficulty = {}
+    records.forEach(r => {
+      const key = r.normalizedDifficulty || normalizeDifficultyId(r.difficulty)
+      if (!byDifficulty[key] || r.score > byDifficulty[key].score) {
+        byDifficulty[key] = r
+      }
+    })
+    return {
+      byDifficulty,
+      sorted: sortDifficulties(Object.values(byDifficulty).map(r => ({
+        id: r.normalizedDifficulty || normalizeDifficultyId(r.difficulty),
+        name: r.difficultyName || r.difficulty,
+        color: r.difficultyColor,
+        level: r.level,
+        record: r
+      }))),
+      total: Object.keys(byDifficulty).length,
+      best: records.length > 0 ? records.reduce((best, curr) => 
+        curr.score > best.score ? curr : best
+      ) : null
+    }
+  }, [bestRecords])
+
   const getTrackLeaderboard = useCallback((trackId, difficulty, limit = 10) => {
+    const normalizedDiff = normalizeDifficultyId(difficulty)
     return playHistory
-      .filter(h => h.trackId === trackId && h.difficulty === difficulty && h.cleared && !h.isPracticeMode)
+      .filter(h => {
+        if (h.trackId !== trackId) return false
+        const hDiff = h.normalizedDifficulty || normalizeDifficultyId(h.difficulty)
+        return hDiff === normalizedDiff && h.cleared && !h.isPracticeMode
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
   }, [playHistory])
 
+  const getTrackAllLeaderboards = useCallback((trackId, limit = 10) => {
+    const allCleared = playHistory.filter(h => h.trackId === trackId && h.cleared && !h.isPracticeMode)
+    const byDifficulty = {}
+    allCleared.forEach(h => {
+      const key = h.normalizedDifficulty || normalizeDifficultyId(h.difficulty)
+      if (!byDifficulty[key]) byDifficulty[key] = []
+      byDifficulty[key].push(h)
+    })
+    Object.keys(byDifficulty).forEach(key => {
+      byDifficulty[key] = byDifficulty[key]
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+    })
+    return byDifficulty
+  }, [playHistory])
+
   const getDifficultyLeaderboard = useCallback((difficulty, limit = 10) => {
+    const normalizedDiff = normalizeDifficultyId(difficulty)
     const trackBest = {}
     Object.values(bestRecords)
-      .filter(r => r.difficulty === difficulty)
+      .filter(r => {
+        const rDiff = r.normalizedDifficulty || normalizeDifficultyId(r.difficulty)
+        return rDiff === normalizedDiff
+      })
       .forEach(r => {
         const key = r.trackId
         if (!trackBest[key] || r.score > trackBest[key].score) {
@@ -852,12 +937,59 @@ export function usePlayerStore() {
       .slice(0, limit)
   }, [bestRecords])
 
+  const getAllDifficultyLeaderboards = useCallback((limit = 10) => {
+    const result = {}
+    DIFFICULTY_ORDER.forEach(diffId => {
+      result[diffId] = getDifficultyLeaderboard(diffId, limit)
+    })
+    return result
+  }, [getDifficultyLeaderboard])
+
   const getTrackHistory = useCallback((trackId, difficulty, limit = 10) => {
+    if (difficulty) {
+      const normalizedDiff = normalizeDifficultyId(difficulty)
+      return playHistory
+        .filter(h => {
+          if (h.trackId !== trackId) return false
+          const hDiff = h.normalizedDifficulty || normalizeDifficultyId(h.difficulty)
+          return hDiff === normalizedDiff
+        })
+        .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt))
+        .slice(0, limit)
+    }
     return playHistory
-      .filter(h => h.trackId === trackId && h.difficulty === difficulty)
+      .filter(h => h.trackId === trackId)
       .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt))
       .slice(0, limit)
   }, [playHistory])
+
+  const getOverallDifficultyStats = useCallback(() => {
+    const stats = {}
+    DIFFICULTY_ORDER.forEach(diffId => {
+      const diffInfo = getDifficultyInfo(diffId)
+      const clearedRecords = Object.values(bestRecords).filter(r => {
+        const rDiff = r.normalizedDifficulty || normalizeDifficultyId(r.difficulty)
+        return rDiff === diffId && r.cleared
+      })
+      const totalBestScore = clearedRecords.reduce((sum, r) => sum + r.score, 0)
+      const avgAccuracy = clearedRecords.length > 0
+        ? clearedRecords.reduce((sum, r) => sum + r.accuracy, 0) / clearedRecords.length
+        : 0
+      stats[diffId] = {
+        id: diffId,
+        name: diffInfo?.name || diffId,
+        color: diffInfo?.color || '#888',
+        clearedCount: clearedRecords.length,
+        totalBestScore,
+        avgAccuracy: Math.round(avgAccuracy * 100) / 100,
+        bestRecord: clearedRecords.length > 0
+          ? clearedRecords.reduce((best, curr) => curr.score > best.score ? curr : best)
+          : null,
+        highestLevel: clearedRecords.reduce((max, r) => Math.max(max, r.level || 0), 0)
+      }
+    })
+    return stats
+  }, [bestRecords])
 
   const getOverallStats = useCallback(() => {
     const clearedRecords = Object.values(bestRecords).filter(r => r.cleared)
@@ -962,10 +1094,36 @@ export function usePlayerStore() {
   }, [replays])
 
   const getTrackReplays = useCallback((trackId, difficulty, limit = 5) => {
+    if (difficulty) {
+      const normalizedDiff = normalizeDifficultyId(difficulty)
+      return replays
+        .filter(r => {
+          if (r.trackId !== trackId) return false
+          const rDiff = r.normalizedDifficulty || normalizeDifficultyId(r.difficulty)
+          return rDiff === normalizedDiff
+        })
+        .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt))
+        .slice(0, limit)
+    }
     return replays
-      .filter(r => r.trackId === trackId && r.difficulty === difficulty)
+      .filter(r => r.trackId === trackId)
       .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt))
       .slice(0, limit)
+  }, [replays])
+
+  const getTrackAllReplays = useCallback((trackId, limitPerDifficulty = 3) => {
+    const byDifficulty = {}
+    replays
+      .filter(r => r.trackId === trackId)
+      .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt))
+      .forEach(r => {
+        const key = r.normalizedDifficulty || normalizeDifficultyId(r.difficulty)
+        if (!byDifficulty[key]) byDifficulty[key] = []
+        if (byDifficulty[key].length < limitPerDifficulty) {
+          byDifficulty[key].push(r)
+        }
+      })
+    return byDifficulty
   }, [replays])
 
   const deleteReplay = useCallback((replayId) => {
@@ -1130,11 +1288,16 @@ export function usePlayerStore() {
     getBestRecord,
     checkIsNewRecord,
     getTrackLeaderboard,
+    getTrackAllLeaderboards,
     getDifficultyLeaderboard,
+    getAllDifficultyLeaderboards,
     getTrackHistory,
+    getTrackAllBestRecords,
     getOverallStats,
+    getOverallDifficultyStats,
     getReplayAnalysis,
     getTrackReplays,
+    getTrackAllReplays,
     deleteReplay,
     setCurrentTitle,
     clearNewlyUnlocked,

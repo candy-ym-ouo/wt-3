@@ -451,6 +451,10 @@ export default function App() {
           theme={themeStore.theme}
           isDailyChallengeMode={isDailyChallengeMode}
           dailyChallengeResult={dailyChallengeResult}
+          trackAllBestRecords={playerStore.getTrackAllBestRecords(selectedTrack.id)}
+          trackAllLeaderboards={playerStore.getTrackAllLeaderboards(selectedTrack.id)}
+          allDifficultyLeaderboards={playerStore.getAllDifficultyLeaderboards()}
+          overallDifficultyStats={playerStore.getOverallDifficultyStats()}
         />
       )}
       {showGrowthCenter && (

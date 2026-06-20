@@ -1,11 +1,19 @@
 import { useEffect, useState, useRef } from 'react'
 import { RANK_COLORS } from '../data/growthData.js'
+import {
+  DIFFICULTIES,
+  DIFFICULTY_ORDER,
+  getDifficultyInfo,
+  normalizeDifficultyId,
+  sortDifficulties
+} from '../data/tracks.js'
 
 const LEADERBOARD_TABS = [
   { id: 'track', label: '曲目榜' },
   { id: 'difficulty', label: '难度榜' },
   { id: 'history', label: '历史记录' },
-  { id: 'replay', label: '复盘分析' }
+  { id: 'replay', label: '复盘分析' },
+  { id: 'alldiffs', label: '各难度成绩' }
 ]
 
 export default function Result({
@@ -29,9 +37,14 @@ export default function Result({
   onDeleteReplay,
   theme,
   isDailyChallengeMode = false,
-  dailyChallengeResult = null
+  dailyChallengeResult = null,
+  trackAllBestRecords,
+  trackAllLeaderboards,
+  allDifficultyLeaderboards,
+  overallDifficultyStats
 }) {
   const resultStyle = theme?.resultStyleId || 'neon'
+  const currentDiffInfo = getDifficultyInfo(track.difficulty)
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
     perfect: 0,
@@ -46,6 +59,7 @@ export default function Result({
   const [showRecordBanner, setShowRecordBanner] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
   const [activeTab, setActiveTab] = useState('track')
+  const [activeDiffTab, setActiveDiffTab] = useState(normalizeDifficultyId(track.difficulty))
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   
@@ -361,8 +375,62 @@ export default function Result({
           </div>
           <h1 style={styles.trackTitle}>{track.title}</h1>
           <div style={styles.trackArtist}>
-            {track.artist} · {track.difficulty} Lv.{track.level}
+            {track.artist}
+            {currentDiffInfo && (
+              <span style={{
+                ...styles.difficultyBadge,
+                background: `${currentDiffInfo.color}22`,
+                borderColor: `${currentDiffInfo.color}55`,
+                color: currentDiffInfo.color
+              }}>
+                {currentDiffInfo.name} Lv.{track.level}
+              </span>
+            )}
+            {!currentDiffInfo && (
+              <span> · {track.difficulty} Lv.{track.level}</span>
+            )}
           </div>
+
+          {trackAllBestRecords && track.difficulties?.length > 1 && (
+            <div style={styles.allDiffsMiniHeader}>
+              <div style={styles.allDiffsMiniLabel}>各难度最佳:</div>
+              <div style={styles.allDiffsMiniBadges}>
+                {sortDifficulties(track.difficulties).map(diff => {
+                  const key = normalizeDifficultyId(diff.id)
+                  const diffBest = trackAllBestRecords.byDifficulty?.[key]
+                  const isCurrent = key === normalizeDifficultyId(track.difficulty)
+                  return (
+                    <div
+                      key={key}
+                      style={{
+                        ...styles.diffMiniBadge,
+                        borderColor: isCurrent ? diff.color : `${diff.color}44`,
+                        background: isCurrent ? `${diff.color}22` : 'rgba(255,255,255,0.02)'
+                      }}
+                    >
+                      <span style={{
+                        ...styles.diffMiniName,
+                        color: diffBest ? diff.color : `${diff.color}88`
+                      }}>
+                        {diff.name}
+                      </span>
+                      {diffBest ? (
+                        <span style={{
+                          ...styles.diffMiniRank,
+                          color: RANK_COLORS[diffBest.rank] || '#fff'
+                        }}>
+                          {diffBest.rank}
+                        </span>
+                      ) : (
+                        <span style={styles.diffMiniLocked}>—</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {bestRecord && (
             <div style={styles.bestRecordInfo}>
               <span style={styles.bestRecordLabel}>历史最佳: </span>
@@ -607,12 +675,68 @@ export default function Result({
               />
             )}
             {activeTab === 'difficulty' && (
-              <LeaderboardList
-                type="difficulty"
-                entries={difficultyLeaderboard}
-                formatDate={formatDate}
-                getRankBadgeStyle={getRankBadgeStyle}
-              />
+              <div>
+                {allDifficultyLeaderboards ? (
+                  <div>
+                    <div style={styles.diffSubTabBar}>
+                      {DIFFICULTY_ORDER.map(diffId => {
+                        const diffInfo = getDifficultyInfo(diffId)
+                        const entries = allDifficultyLeaderboards[diffId] || []
+                        return (
+                          <button
+                            key={diffId}
+                            style={{
+                              ...styles.diffSubTabBtn,
+                              borderColor: activeDiffTab === diffId ? diffInfo.color : 'rgba(255,255,255,0.06)',
+                              color: activeDiffTab === diffId ? diffInfo.color : 'rgba(255,255,255,0.4)',
+                              background: activeDiffTab === diffId ? `${diffInfo.color}18` : 'rgba(255,255,255,0.02)'
+                            }}
+                            onClick={() => setActiveDiffTab(diffId)}
+                          >
+                            <span>{diffInfo.name}</span>
+                            <span style={styles.diffSubTabCount}>
+                              {entries.length}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div style={styles.diffSubTabContent}>
+                      <LeaderboardList
+                        type="difficulty"
+                        entries={allDifficultyLeaderboards[activeDiffTab] || []}
+                        formatDate={formatDate}
+                        getRankBadgeStyle={getRankBadgeStyle}
+                      />
+                      {overallDifficultyStats && overallDifficultyStats[activeDiffTab] && (
+                        <div style={styles.diffStatsSummary}>
+                          <div style={styles.diffStatsRow}>
+                            <div style={styles.diffStatsItem}>
+                              <span style={styles.diffStatsLabel}>已通关</span>
+                              <span style={styles.diffStatsValue}>{overallDifficultyStats[activeDiffTab].clearedCount} 首</span>
+                            </div>
+                            <div style={styles.diffStatsItem}>
+                              <span style={styles.diffStatsLabel}>最高等级</span>
+                              <span style={styles.diffStatsValue}>Lv.{overallDifficultyStats[activeDiffTab].highestLevel}</span>
+                            </div>
+                            <div style={styles.diffStatsItem}>
+                              <span style={styles.diffStatsLabel}>平均准度</span>
+                              <span style={styles.diffStatsValue}>{overallDifficultyStats[activeDiffTab].avgAccuracy}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <LeaderboardList
+                    type="difficulty"
+                    entries={difficultyLeaderboard}
+                    formatDate={formatDate}
+                    getRankBadgeStyle={getRankBadgeStyle}
+                  />
+                )}
+              </div>
             )}
             {activeTab === 'history' && (
               <HistoryList
@@ -638,6 +762,15 @@ export default function Result({
                 replayCanvasRef={replayCanvasRef}
                 replayAnimRef={replayAnimRef}
                 track={track}
+              />
+            )}
+            {activeTab === 'alldiffs' && trackAllBestRecords && track.difficulties && (
+              <AllDiffsView
+                track={track}
+                trackAllBestRecords={trackAllBestRecords}
+                trackAllLeaderboards={trackAllLeaderboards}
+                formatDate={formatDate}
+                getRankBadgeStyle={getRankBadgeStyle}
               />
             )}
           </div>
@@ -729,6 +862,142 @@ export default function Result({
           按 R 重试 · 按 ESC 返回
         </div>
       </div>
+    </div>
+  )
+}
+
+function AllDiffsView({ track, trackAllBestRecords, trackAllLeaderboards, formatDate, getRankBadgeStyle }) {
+  const [selectedDiff, setSelectedDiff] = useState(normalizeDifficultyId(track.difficulty))
+  const sortedDifficulties = sortDifficulties(track.difficulties)
+  const totalDifficulties = sortedDifficulties.length
+  const clearedCount = sortedDifficulties.filter(d => trackAllBestRecords.byDifficulty?.[normalizeDifficultyId(d.id)]).length
+  const progress = totalDifficulties > 0 ? Math.round((clearedCount / totalDifficulties) * 100) : 0
+
+  const selectedDiffInfo = sortedDifficulties.find(d => normalizeDifficultyId(d.id) === selectedDiff)
+  const selectedRecord = trackAllBestRecords.byDifficulty?.[selectedDiff]
+  const selectedLeaderboard = trackAllLeaderboards?.[selectedDiff] || []
+
+  return (
+    <div style={styles.allDiffsContainer}>
+      <div style={styles.allDiffsHeader}>
+        <div style={styles.allDiffsTitleSection}>
+          <div style={styles.allDiffsTitle}>🎯 该曲目各难度成绩</div>
+          <div style={styles.allDiffsProgressInfo}>
+            <span style={styles.allDiffsProgressText}>
+              已通关: {clearedCount} / {totalDifficulties} ({progress}%)
+            </span>
+            <div style={styles.allDiffsProgressBarBg}>
+              <div style={{
+                ...styles.allDiffsProgressBar,
+                width: `${progress}%`,
+                background: progress === 100
+                  ? 'linear-gradient(90deg, #00ffcc, #ffcc00)'
+                  : 'linear-gradient(90deg, #6699ff, #ff3366)'
+              }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.allDiffsCards}>
+        {sortedDifficulties.map(diff => {
+          const key = normalizeDifficultyId(diff.id)
+          const record = trackAllBestRecords.byDifficulty?.[key]
+          const isSelected = key === selectedDiff
+          const isCurrent = key === normalizeDifficultyId(track.difficulty)
+
+          return (
+            <div
+              key={key}
+              style={{
+                ...styles.diffCard,
+                borderColor: isSelected ? diff.color : 'rgba(255,255,255,0.06)',
+                background: isSelected ? `${diff.color}12` : 'rgba(255,255,255,0.02)',
+                boxShadow: isSelected ? `0 0 20px ${diff.color}22` : 'none'
+              }}
+              onClick={() => setSelectedDiff(key)}
+            >
+              <div style={styles.diffCardHeader}>
+                <span style={{
+                  ...styles.diffCardName,
+                  color: diff.color
+                }}>
+                  {diff.name}
+                </span>
+                <span style={{
+                  ...styles.diffCardLevel,
+                  background: `${diff.color}22`,
+                  color: diff.color
+                }}>
+                  Lv.{diff.level}
+                </span>
+                {isCurrent && (
+                  <span style={styles.diffCurrentBadge}>本次</span>
+                )}
+              </div>
+              {record ? (
+                <div style={styles.diffCardContent}>
+                  <div style={styles.diffCardScore}>
+                    {String(record.score).padStart(8, '0')}
+                  </div>
+                  <div style={styles.diffCardRow}>
+                    <span style={{
+                      ...styles.diffCardRank,
+                      background: `${RANK_COLORS[record.rank]}22`,
+                      color: RANK_COLORS[record.rank]
+                    }}>
+                      {record.rank}
+                    </span>
+                    <span style={styles.diffCardAcc}>{record.accuracy.toFixed(2)}%</span>
+                    <span style={styles.diffCardCombo}>{record.maxCombo} COMBO</span>
+                  </div>
+                  <div style={styles.diffCardDate}>
+                    达成: {formatDate(record.updatedAt)}
+                  </div>
+                </div>
+              ) : (
+                <div style={styles.diffCardLocked}>
+                  <div style={styles.diffCardLockedIcon}>🔒</div>
+                  <div style={styles.diffCardLockedText}>尚未通关</div>
+                  <div style={styles.diffCardLockedNotes}>
+                    共 {diff.totalNotes || 0} 音符
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {selectedDiffInfo && (
+        <div style={styles.selectedDiffDetail}>
+          <div style={{
+            ...styles.selectedDiffHeader,
+            borderColor: `${selectedDiffInfo.color}44`
+          }}>
+            <span style={{
+              ...styles.selectedDiffTitle,
+              color: selectedDiffInfo.color
+            }}>
+              {selectedDiffInfo.name} Lv.{selectedDiffInfo.level}
+            </span>
+            <span style={styles.selectedDiffLabel}>排行榜 TOP 5</span>
+          </div>
+          {selectedLeaderboard.length > 0 ? (
+            <LeaderboardList
+              type="track"
+              entries={selectedLeaderboard.slice(0, 5)}
+              formatDate={formatDate}
+              getRankBadgeStyle={getRankBadgeStyle}
+            />
+          ) : (
+            <div style={styles.emptyState}>
+              <div style={styles.emptyIcon}>📊</div>
+              <div style={styles.emptyText}>该难度暂无通关记录</div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -2210,6 +2479,292 @@ const styles = {
     fontSize: '12px',
     color: 'rgba(255,255,255,0.5)',
     marginTop: '4px'
+  },
+  difficultyBadge: {
+    display: 'inline-block',
+    padding: '4px 12px',
+    border: '1px solid',
+    borderRadius: '20px',
+    fontSize: '12px',
+    fontWeight: 700,
+    letterSpacing: '1px',
+    marginLeft: '10px'
+  },
+  allDiffsMiniHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    marginTop: '10px',
+    marginBottom: '4px',
+    flexWrap: 'wrap'
+  },
+  allDiffsMiniLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.35)',
+    fontWeight: 600,
+    letterSpacing: '1px'
+  },
+  allDiffsMiniBadges: {
+    display: 'flex',
+    gap: '6px',
+    flexWrap: 'wrap'
+  },
+  diffMiniBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '4px 10px',
+    border: '1px solid',
+    borderRadius: '12px',
+    transition: 'all 0.2s'
+  },
+  diffMiniName: {
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px'
+  },
+  diffMiniRank: {
+    fontSize: '10px',
+    fontWeight: 900,
+    fontFamily: 'monospace'
+  },
+  diffMiniLocked: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: 'rgba(255,255,255,0.2)',
+    fontFamily: 'monospace'
+  },
+  diffSubTabBar: {
+    display: 'flex',
+    gap: '6px',
+    marginBottom: '12px',
+    flexWrap: 'wrap'
+  },
+  diffSubTabBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 12px',
+    border: '1px solid',
+    borderRadius: '8px',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '1px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  diffSubTabCount: {
+    padding: '1px 6px',
+    background: 'rgba(0,0,0,0.3)',
+    borderRadius: '8px',
+    fontSize: '9px',
+    fontFamily: 'monospace',
+    opacity: 0.7
+  },
+  diffSubTabContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  diffStatsSummary: {
+    padding: '12px 16px',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: '10px'
+  },
+  diffStatsRow: {
+    display: 'flex',
+    gap: '16px',
+    justifyContent: 'space-around'
+  },
+  diffStatsItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '4px'
+  },
+  diffStatsLabel: {
+    fontSize: '9px',
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: '1px'
+  },
+  diffStatsValue: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#fff',
+    fontFamily: 'monospace'
+  },
+  allDiffsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px'
+  },
+  allDiffsHeader: {
+    paddingBottom: '12px',
+    borderBottom: '1px solid rgba(255,255,255,0.06)'
+  },
+  allDiffsTitleSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  allDiffsTitle: {
+    fontSize: '14px',
+    fontWeight: 800,
+    color: 'rgba(255,255,255,0.9)',
+    letterSpacing: '2px'
+  },
+  allDiffsProgressInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  allDiffsProgressText: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.6)',
+    fontFamily: 'monospace'
+  },
+  allDiffsProgressBarBg: {
+    height: '6px',
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: '3px',
+    overflow: 'hidden'
+  },
+  allDiffsProgressBar: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.6s ease-out'
+  },
+  allDiffsCards: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gap: '10px'
+  },
+  diffCard: {
+    padding: '14px',
+    border: '1.5px solid',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.25s ease-out'
+  },
+  diffCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '10px'
+  },
+  diffCardName: {
+    fontSize: '12px',
+    fontWeight: 800,
+    letterSpacing: '2px',
+    flex: 1
+  },
+  diffCardLevel: {
+    padding: '2px 8px',
+    borderRadius: '8px',
+    fontSize: '10px',
+    fontWeight: 700,
+    fontFamily: 'monospace'
+  },
+  diffCurrentBadge: {
+    padding: '2px 8px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.3), rgba(255,51,102,0.15))',
+    border: '1px solid rgba(255,51,102,0.4)',
+    borderRadius: '8px',
+    fontSize: '9px',
+    fontWeight: 700,
+    color: '#ff3366',
+    letterSpacing: '1px'
+  },
+  diffCardContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px'
+  },
+  diffCardScore: {
+    fontSize: '18px',
+    fontWeight: 900,
+    fontFamily: 'monospace',
+    color: '#fff',
+    letterSpacing: '1px'
+  },
+  diffCardRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap'
+  },
+  diffCardRank: {
+    padding: '2px 8px',
+    borderRadius: '6px',
+    fontSize: '11px',
+    fontWeight: 900,
+    fontFamily: 'monospace'
+  },
+  diffCardAcc: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#ffcc00',
+    fontFamily: 'monospace'
+  },
+  diffCardCombo: {
+    fontSize: '10px',
+    color: '#00ffcc',
+    fontFamily: 'monospace',
+    opacity: 0.8
+  },
+  diffCardDate: {
+    fontSize: '9px',
+    color: 'rgba(255,255,255,0.3)',
+    fontFamily: 'monospace',
+    marginTop: '2px'
+  },
+  diffCardLocked: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 0'
+  },
+  diffCardLockedIcon: {
+    fontSize: '20px',
+    opacity: 0.4
+  },
+  diffCardLockedText: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'rgba(255,255,255,0.35)'
+  },
+  diffCardLockedNotes: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.25)',
+    fontFamily: 'monospace'
+  },
+  selectedDiffDetail: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
+  },
+  selectedDiffHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 14px',
+    border: '1px solid',
+    borderRadius: '10px',
+    background: 'rgba(255,255,255,0.02)'
+  },
+  selectedDiffTitle: {
+    fontSize: '13px',
+    fontWeight: 800,
+    letterSpacing: '2px'
+  },
+  selectedDiffLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.4)',
+    letterSpacing: '1px'
   }
 }
 

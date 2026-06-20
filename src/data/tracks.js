@@ -7,10 +7,46 @@ export const defaultKeyConfig = {
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 export const DIFFICULTIES = {
-  EASY: { id: 'easy', name: '简单', color: '#66ff99', levelRange: [1, 5] },
-  NORMAL: { id: 'normal', name: '普通', color: '#ffcc00', levelRange: [6, 10] },
-  HARD: { id: 'hard', name: '困难', color: '#ff6666', levelRange: [11, 15] },
-  EXPERT: { id: 'expert', name: '专家', color: '#cc66ff', levelRange: [16, 20] }
+  EASY: { id: 'easy', name: '简单', color: '#66ff99', levelRange: [1, 5], order: 1 },
+  NORMAL: { id: 'normal', name: '普通', color: '#ffcc00', levelRange: [6, 10], order: 2 },
+  HARD: { id: 'hard', name: '困难', color: '#ff6666', levelRange: [11, 15], order: 3 },
+  EXPERT: { id: 'expert', name: '专家', color: '#cc66ff', levelRange: [16, 20], order: 4 }
+}
+
+export const DIFFICULTY_ORDER = ['easy', 'normal', 'hard', 'expert']
+
+export const getDifficultyInfo = (diffId) => {
+  const upper = diffId?.toUpperCase?.()
+  return DIFFICULTIES[upper] || Object.values(DIFFICULTIES).find(d => d.id === diffId) || null
+}
+
+export const getDifficultyColor = (diffId) => {
+  return getDifficultyInfo(diffId)?.color || '#888888'
+}
+
+export const getDifficultyName = (diffId) => {
+  return getDifficultyInfo(diffId)?.name || diffId || '未知'
+}
+
+export const normalizeDifficultyId = (input) => {
+  if (!input) return null
+  if (typeof input !== 'string') return null
+  const lower = input.toLowerCase()
+  if (DIFFICULTY_ORDER.includes(lower)) return lower
+  const found = Object.values(DIFFICULTIES).find(d => d.name === input)
+  return found?.id || lower
+}
+
+export const sortDifficulties = (difficulties) => {
+  if (!Array.isArray(difficulties)) return []
+  return [...difficulties].sort((a, b) => {
+    const orderA = DIFFICULTY_ORDER.indexOf(normalizeDifficultyId(a.id))
+    const orderB = DIFFICULTY_ORDER.indexOf(normalizeDifficultyId(b.id))
+    if (orderA === -1 && orderB === -1) return (a.level || 0) - (b.level || 0)
+    if (orderA === -1) return 1
+    if (orderB === -1) return -1
+    return orderA - orderB
+  })
 }
 
 export function semitonesFromRoot(root, semitones) {
@@ -732,7 +768,9 @@ export const getTracksByPack = (packId) => {
 export const getTrackWithDifficulty = (trackId, difficultyId) => {
   const track = getTrackById(trackId)
   if (!track) return null
-  const diff = track.difficulties.find(d => d.id === difficultyId)
+  const normalizedDiffId = normalizeDifficultyId(difficultyId)
+  const diff = track.difficulties.find(d => normalizeDifficultyId(d.id) === normalizedDiffId)
+    || track.difficulties.find(d => d.id === difficultyId)
   if (!diff) return null
   return {
     ...track,
@@ -746,27 +784,100 @@ export const getTrackWithDifficulty = (trackId, difficultyId) => {
   }
 }
 
-const getDifficultyName = (diffId) => {
-  return DIFFICULTIES[diffId?.toUpperCase()]?.name || diffId
+export const makeRecordKey = (trackId, difficulty) => {
+  const normalizedId = normalizeDifficultyId(difficulty)
+  return `${trackId}_${normalizedId}`
 }
 
-const getDifficultyId = (diffName) => {
-  const entry = Object.values(DIFFICULTIES).find(d => d.name === diffName)
-  return entry?.id || diffName
+export const getTrackDifficultyStats = (track, getBestRecordFn) => {
+  if (!track || !track.difficulties) return { total: 0, cleared: 0, progress: 0 }
+  const sorted = sortDifficulties(track.difficulties)
+  const stats = sorted.map(diff => {
+    const record = getBestRecordFn ? getBestRecordFn(track.id, diff.id) : null
+    return {
+      ...diff,
+      normalizedId: normalizeDifficultyId(diff.id),
+      cleared: record?.cleared || false,
+      record
+    }
+  })
+  const clearedCount = stats.filter(s => s.cleared).length
+  return {
+    total: stats.length,
+    cleared: clearedCount,
+    progress: stats.length > 0 ? Math.round((clearedCount / stats.length) * 100) : 0,
+    difficulties: stats,
+    allCleared: clearedCount === stats.length && stats.length > 0,
+    maxClearedLevel: stats.filter(s => s.cleared).reduce((max, s) => Math.max(max, s.level || 0), 0)
+  }
+}
+
+export const getTrackDifficultySummary = (track, getBestRecordFn) => {
+  const stats = getTrackDifficultyStats(track, getBestRecordFn)
+  const sorted = stats.difficulties
+  const clearedLabels = sorted
+    .filter(s => s.cleared)
+    .map(s => s.name)
+  return {
+    ...stats,
+    clearedText: clearedLabels.length > 0 ? clearedLabels.join('、') : '尚未通关',
+    progressText: `${stats.cleared}/${stats.total}`,
+    statusBadge: stats.allCleared ? '全通关' : (stats.cleared > 0 ? '部分通关' : '未通关'),
+    statusColor: stats.allCleared ? '#66ff99' : (stats.cleared > 0 ? '#ffcc00' : '#ff6666')
+  }
+}
+
+export const getRecommendedDifficulty = (track, playerLevel, getBestRecordFn) => {
+  if (!track || !track.difficulties) return null
+  const sorted = sortDifficulties(track.difficulties)
+  const stats = getTrackDifficultyStats(track, getBestRecordFn)
+
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const diff = sorted[i]
+    if (!stats.difficulties[i].cleared && diff.level <= (playerLevel + 2)) {
+      return diff
+    }
+  }
+
+  for (let i = 0; i < sorted.length; i++) {
+    if (!stats.difficulties[i].cleared) {
+      return sorted[i]
+    }
+  }
+
+  return sorted[sorted.length - 1] || null
+}
+
+export const getNextLockedDifficulty = (track, getBestRecordFn) => {
+  const stats = getTrackDifficultyStats(track, getBestRecordFn)
+  const sorted = stats.difficulties
+  for (let i = 0; i < sorted.length; i++) {
+    if (!sorted[i].cleared) {
+      return sorted[i]
+    }
+  }
+  return null
 }
 
 const findBestRecord = (trackId, difficulty, bestRecords) => {
-  const diffName = getDifficultyName(difficulty)
-  const diffId = getDifficultyId(difficulty)
-  const keyWithName = `${trackId}_${diffName}`
-  const keyWithId = `${trackId}_${diffId}`
+  const normalizedDiff = normalizeDifficultyId(difficulty)
+  const key = makeRecordKey(trackId, normalizedDiff)
 
-  if (bestRecords[keyWithName]?.cleared) {
-    return bestRecords[keyWithName]
+  if (bestRecords[key]?.cleared) {
+    return bestRecords[key]
   }
-  if (bestRecords[keyWithId]?.cleared) {
-    return bestRecords[keyWithId]
+
+  const altKey1 = `${trackId}_${difficulty}`
+  if (bestRecords[altKey1]?.cleared) {
+    return bestRecords[altKey1]
   }
+
+  const diffName = getDifficultyName(difficulty)
+  const altKey2 = `${trackId}_${diffName}`
+  if (bestRecords[altKey2]?.cleared) {
+    return bestRecords[altKey2]
+  }
+
   return null
 }
 
