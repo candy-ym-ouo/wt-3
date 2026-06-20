@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { usePracticeStore } from '../store/usePracticeStore.js'
 import { useKeyPresetStore } from '../store/useKeyPresetStore.js'
+import { defaultKeyConfig } from '../data/tracks.js'
 
 const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 const THRESHOLD_OPTIONS = [
@@ -116,9 +117,9 @@ export default function KeySettings({ keyConfig, onSave, onCancel }) {
 
   const handleReset = () => {
     setConfig({
-      lanes: ['KeyD', 'KeyF', 'KeyJ', 'KeyK'],
-      labels: ['D', 'F', 'J', 'K'],
-      colors: ['#ff3366', '#ffcc00', '#00ffcc', '#6699ff']
+      lanes: [...defaultKeyConfig.lanes],
+      labels: [...defaultKeyConfig.labels],
+      colors: [...defaultKeyConfig.colors]
     })
     setHasUnsavedChanges(true)
   }
@@ -133,9 +134,14 @@ export default function KeySettings({ keyConfig, onSave, onCancel }) {
   }
 
   const handleResetAll = () => {
-    handleReset()
-    resetPracticeSettings()
     resetPresets()
+    resetPracticeSettings()
+    setConfig({
+      lanes: [...defaultKeyConfig.lanes],
+      labels: [...defaultKeyConfig.labels],
+      colors: [...defaultKeyConfig.colors]
+    })
+    setHasUnsavedChanges(false)
   }
 
   const handleSwitchPreset = (presetId) => {
@@ -153,7 +159,7 @@ export default function KeySettings({ keyConfig, onSave, onCancel }) {
   }
 
   const handleSaveCurrent = () => {
-    if (currentPreset && !currentPreset.isDefault) {
+    if (currentPreset) {
       savePreset(currentPresetId, config)
       setHasUnsavedChanges(false)
     }
@@ -342,8 +348,7 @@ export default function KeySettings({ keyConfig, onSave, onCancel }) {
         <button
           style={styles.saveQuickBtn}
           onClick={handleSaveCurrent}
-          disabled={currentPreset?.isDefault}
-          title={currentPreset?.isDefault ? '默认方案不可修改，请使用"另存为"' : '保存修改到当前方案'}
+          title="保存修改到当前方案"
         >
           💾 保存
         </button>
@@ -711,8 +716,9 @@ export default function KeySettings({ keyConfig, onSave, onCancel }) {
 
   const handleSaveAndClose = () => {
     if (activeTab === 'keys' && conflicts.length > 0) return
-    if (activeTab === 'keys' && hasUnsavedChanges && !currentPreset?.isDefault) {
+    if (activeTab === 'keys' && hasUnsavedChanges) {
       savePreset(currentPresetId, config)
+      setHasUnsavedChanges(false)
     }
     onSave(config)
   }
