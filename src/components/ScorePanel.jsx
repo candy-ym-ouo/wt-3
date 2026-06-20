@@ -14,11 +14,16 @@ export default function ScorePanel({
   trackTitle,
   judgeFeedback,
   totalNotes,
-  missions = null
+  missions = null,
+  healthPolicy = null,
+  difficultyInfo = null
 }) {
   const [displayScore, setDisplayScore] = useState(0)
   const [comboFlash, setComboFlash] = useState(false)
   const prevComboRef = useState(0)
+
+  const effectiveMaxHealth = healthPolicy?.maxHealth || 100
+  const healthPercent = (health / effectiveMaxHealth) * 100
 
   useEffect(() => {
     if (combo > prevComboRef[0] && combo >= 10) {
@@ -47,7 +52,7 @@ export default function ScorePanel({
     return `${m}:${String(s).padStart(2, '0')}`
   }
 
-  const healthColor = health > 70 ? '#00ffcc' : health > 40 ? '#ffcc00' : '#ff3366'
+  const healthColor = healthPercent > 70 ? '#00ffcc' : healthPercent > 40 ? '#ffcc00' : '#ff3366'
 
   const estimatedTier = useMemo(() => {
     if (!totalNotes || totalNotes <= 0) return null
@@ -121,19 +126,38 @@ export default function ScorePanel({
         <div style={styles.healthHeader}>
           <span style={styles.healthLabel}>HP</span>
           <span style={{ ...styles.healthValue, color: healthColor }}>
-            {Math.floor(Math.max(0, health))}%
+            {Math.floor(Math.max(0, health))} / {effectiveMaxHealth}
           </span>
         </div>
         <div style={styles.healthBarBg}>
           <div
             style={{
               ...styles.healthBarFill,
-              width: `${Math.max(0, Math.min(100, health))}%`,
+              width: `${Math.max(0, Math.min(100, healthPercent))}%`,
               background: `linear-gradient(90deg, ${healthColor}, ${healthColor}cc)`,
               boxShadow: `0 0 20px ${healthColor}66`
             }}
           />
         </div>
+        {(healthPolicy || difficultyInfo) && (
+          <div style={styles.healthPolicyInfo}>
+            {difficultyInfo && (
+              <span style={{
+                ...styles.difficultyBadge,
+                background: `${difficultyInfo.color}22`,
+                borderColor: `${difficultyInfo.color}55`,
+                color: difficultyInfo.color
+              }}>
+                {difficultyInfo.name}
+              </span>
+            )}
+            {healthPolicy && (
+              <span style={styles.policyLabel}>
+                {healthPolicy.name}模式
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {estimatedTierInfo && (
@@ -414,9 +438,29 @@ const styles = {
     borderRadius: '5px',
     transition: 'width 0.2s ease-out'
   },
+  healthPolicyInfo: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '8px',
+    alignItems: 'center'
+  },
+  difficultyBadge: {
+    padding: '3px 8px',
+    borderRadius: '6px',
+    border: '1px solid',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '1px'
+  },
+  policyLabel: {
+    fontSize: '10px',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: '1px',
+    fontWeight: 600
+  },
   tierSection: {
     position: 'absolute',
-    top: '160px',
+    top: '200px',
     right: '32px',
     width: '200px'
   },
@@ -486,7 +530,7 @@ const styles = {
   },
   missionsSection: {
     position: 'absolute',
-    top: '240px',
+    top: '280px',
     right: '32px',
     width: '240px',
     background: 'rgba(0,0,0,0.5)',

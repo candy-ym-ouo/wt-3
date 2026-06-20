@@ -7,6 +7,7 @@ import { usePracticeStore } from '../store/usePracticeStore.js'
 import { useCalibrationStore } from '../store/useCalibrationStore.js'
 import { calculateTierGrade, getTierBreakdown } from '../data/growthData.js'
 import { initializeMissionTracker, updateMissionProgress, finalizeMissions } from '../data/missionData.js'
+import { getHealthPolicy, getDifficultyInfo } from '../data/tracks.js'
 
 const JUDGE_WINDOWS = {
   perfect: 0.05,
@@ -43,11 +44,14 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
   const tutorialJudgeMultiplier = isTutorialMode ? 1.5 : 1.0
   const dailyChallengePlaybackSpeed = (isDailyChallengeMode && dailyChallengeModifiers?.playbackSpeed) ? dailyChallengeModifiers.playbackSpeed : 1.0
 
+  const healthPolicy = getHealthPolicy(track.difficultyId || track.difficulty)
+  const diffInfo = getDifficultyInfo(track.difficultyId || track.difficulty)
+
   const [gameState, setGameState] = useState('ready')
   const [score, setScore] = useState(0)
   const [combo, setCombo] = useState(0)
   const [maxCombo, setMaxCombo] = useState(0)
-  const [health, setHealth] = useState(100)
+  const [health, setHealth] = useState(healthPolicy.initialHealth)
   const [currentTime, setCurrentTime] = useState(0)
   const [progress, setProgress] = useState(0)
   const [judgeFeedback, setJudgeFeedback] = useState(null)
@@ -110,7 +114,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
   const statsRef = useRef({ perfect: 0, great: 0, good: 0, miss: 0 })
   const comboRef = useRef(0)
   const scoreRef = useRef(0)
-  const healthRef = useRef(100)
+  const healthRef = useRef(healthPolicy.initialHealth)
   const maxComboRef = useRef(0)
   const gameEndedRef = useRef(false)
   const isStartingRef = useRef(false)
@@ -448,16 +452,20 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
     setStats({ ...statsRef.current })
 
     if (judgeType === 'miss') {
-      healthRef.current = Math.max(0, healthRef.current - 8)
+      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss)
       if (isDailyChallengeMode && dailyChallengeModifiers?.suddenDeath) {
         healthRef.current = 0
       }
     } else if (judgeType === 'good') {
-      healthRef.current = Math.min(100, healthRef.current + 2)
+      healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.good)
+      healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.recover.good)
     } else if (judgeType === 'great') {
-      healthRef.current = Math.min(100, healthRef.current + 4)
+      healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.recover.great)
     } else if (judgeType === 'perfect') {
-      healthRef.current = Math.min(100, healthRef.current + 6)
+      healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.recover.perfect)
+      if (healthPolicy.comboHealthBonus && comboRef.current > 0 && comboRef.current % 10 === 0) {
+        healthRef.current = Math.min(healthPolicy.maxHealth, healthRef.current + healthPolicy.comboBonusPer10)
+      }
     }
     setHealth(healthRef.current)
 
@@ -630,7 +638,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         rank,
         stats: finalStats,
         totalNotes,
-        cleared: healthRef.current > 0
+        cleared: healthRef.current > healthPolicy.failThreshold
       }
     }
 
@@ -646,7 +654,8 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       rank,
       totalNotes,
       health: healthRef.current,
-      cleared: healthRef.current > 0,
+      cleared: healthRef.current > healthPolicy.failThreshold,
+      healthPolicy: healthPolicy,
       isPracticeMode,
       playbackSpeed: currentPlaybackSpeed,
       replayData,
@@ -752,7 +761,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
       statsRef.current = { perfect: 0, great: 0, good: 0, miss: 0 }
       comboRef.current = 0
       scoreRef.current = 0
-      healthRef.current = 100
+      healthRef.current = healthPolicy.initialHealth
       maxComboRef.current = 0
       gameEndedRef.current = false
       hasStartedRef.current = true
@@ -771,13 +780,13 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         keyEvents: [],
         judgeEvents: [],
         scoreHistory: [{ time: 0, score: 0, combo: 0 }],
-        healthHistory: [{ time: 0, health: 100 }]
+        healthHistory: [{ time: 0, health: healthPolicy.initialHealth }]
       }
 
       setStats({ perfect: 0, great: 0, good: 0, miss: 0 })
       setCombo(0)
       setScore(0)
-      setHealth(100)
+      setHealth(healthPolicy.initialHealth)
       setMaxCombo(0)
       setCurrentTime(range.start)
       setProgress(0)
@@ -896,7 +905,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
             setCombo(0)
             statsRef.current.miss += 1
             setStats({ ...statsRef.current })
-            healthRef.current = Math.max(0, healthRef.current - 8)
+            healthRef.current = Math.max(0, healthRef.current - healthPolicy.damage.miss)
             setHealth(healthRef.current)
 
             if (shouldReplayNote('miss')) {
@@ -1025,7 +1034,7 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
           return (now - hf.time) < 0.6
         })
 
-        if (healthRef.current <= 0 && !gameEndedRef.current && !isPracticeMode) {
+        if (healthRef.current <= healthPolicy.failThreshold && !gameEndedRef.current && !isPracticeMode) {
           gameEndedRef.current = true
           endGame()
           return
@@ -1230,6 +1239,8 @@ export default function Game({ track, keyConfig, onEnd, onQuit, isPracticeMode =
         judgeFeedback={judgeFeedback}
         totalNotes={getFilteredNotes().length}
         missions={missionTracker}
+        healthPolicy={healthPolicy}
+        difficultyInfo={diffInfo}
       />
 
       {isPracticeMode && (

@@ -13,6 +13,90 @@ export const DIFFICULTIES = {
   EXPERT: { id: 'expert', name: '专家', color: '#cc66ff', levelRange: [16, 20], order: 4 }
 }
 
+export const HEALTH_POLICIES = {
+  easy: {
+    id: 'easy',
+    name: '宽松',
+    description: '新手友好，容错率高',
+    initialHealth: 100,
+    maxHealth: 100,
+    damage: {
+      miss: 4,
+      good: 0
+    },
+    recover: {
+      perfect: 8,
+      great: 6,
+      good: 4
+    },
+    failThreshold: 30,
+    comboHealthBonus: true,
+    comboBonusPer10: 2
+  },
+  normal: {
+    id: 'normal',
+    name: '标准',
+    description: '平衡的挑战难度',
+    initialHealth: 100,
+    maxHealth: 100,
+    damage: {
+      miss: 8,
+      good: 1
+    },
+    recover: {
+      perfect: 6,
+      great: 4,
+      good: 2
+    },
+    failThreshold: 0,
+    comboHealthBonus: false,
+    comboBonusPer10: 0
+  },
+  hard: {
+    id: 'hard',
+    name: '严酷',
+    description: '失误代价高昂',
+    initialHealth: 80,
+    maxHealth: 100,
+    damage: {
+      miss: 15,
+      good: 3
+    },
+    recover: {
+      perfect: 5,
+      great: 3,
+      good: 1
+    },
+    failThreshold: 0,
+    comboHealthBonus: false,
+    comboBonusPer10: 0
+  },
+  expert: {
+    id: 'expert',
+    name: '致命',
+    description: '极限挑战，不容有失',
+    initialHealth: 60,
+    maxHealth: 100,
+    damage: {
+      miss: 25,
+      good: 6
+    },
+    recover: {
+      perfect: 4,
+      great: 2,
+      good: 0
+    },
+    failThreshold: 0,
+    comboHealthBonus: true,
+    comboBonusPer10: 1
+  }
+}
+
+export const getHealthPolicy = (difficultyId) => {
+  const normalized = normalizeDifficultyId(difficultyId)
+  return HEALTH_POLICIES[normalized] || HEALTH_POLICIES.normal
+}
+
 export const GENRES = {
   ELECTRONIC: { id: 'electronic', name: '电子', color: '#6699ff', icon: '🎹' },
   SYNTHWAVE: { id: 'synthwave', name: '合成器浪潮', color: '#ff66cc', icon: '🎛️' },

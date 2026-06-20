@@ -4,6 +4,7 @@ import {
   DIFFICULTIES,
   DIFFICULTY_ORDER,
   getDifficultyInfo,
+  getHealthPolicy,
   normalizeDifficultyId,
   sortDifficulties
 } from '../data/tracks.js'
@@ -47,6 +48,9 @@ export default function Result({
 }) {
   const resultStyle = theme?.resultStyleId || 'neon'
   const currentDiffInfo = getDifficultyInfo(track.difficulty)
+  const healthPolicy = result.healthPolicy || getHealthPolicy(track.difficulty)
+  const effectiveMaxHealth = healthPolicy?.maxHealth || 100
+  const healthPercent = (result.health / effectiveMaxHealth) * 100
   const [animatedStats, setAnimatedStats] = useState({
     score: 0,
     perfect: 0,
@@ -384,6 +388,16 @@ export default function Result({
             {result.isPracticeMode && (
               <span style={styles.practiceBadge}>🧪 练习模式</span>
             )}
+            {healthPolicy && (
+              <span style={{
+                ...styles.healthPolicyBadge,
+                background: `${currentDiffInfo?.color || '#fff'}22`,
+                borderColor: `${currentDiffInfo?.color || '#fff'}55`,
+                color: currentDiffInfo?.color || '#fff'
+              }}>
+                {healthPolicy.name}模式
+              </span>
+            )}
           </div>
           <h1 style={styles.trackTitle}>{track.title}</h1>
           <div style={styles.trackArtist}>
@@ -524,6 +538,15 @@ export default function Result({
                 }}>{result.maxCombo}</span>
               </div>
               <div style={styles.accuracyItem}>
+                <span style={styles.accuracyLabel}>REMAINING HP</span>
+                <span style={{
+                  ...styles.accuracyValue,
+                  color: healthPercent > 70 ? '#00ffcc' : healthPercent > 40 ? '#ffcc00' : '#ff3366'
+                }}>
+                  {Math.round(result.health)} / {effectiveMaxHealth}
+                </span>
+              </div>
+              <div style={styles.accuracyItem}>
                 <span style={styles.accuracyLabel}>CLEAR RATE</span>
                 <span style={{
                   ...styles.accuracyValue,
@@ -531,6 +554,27 @@ export default function Result({
                 }}>{hitRate.toFixed(1)}%</span>
               </div>
             </div>
+
+            {!result.cleared && healthPolicy && (
+              <div style={styles.healthFailureSection}>
+                <div style={styles.healthFailureIcon}>💔</div>
+                <div style={styles.healthFailureContent}>
+                  <div style={styles.healthFailureTitle}>生命值耗尽</div>
+                  <div style={styles.healthFailurePolicy}>
+                    <span style={styles.healthPolicyName}>{healthPolicy.name}模式</span>
+                    <span style={styles.healthPolicyDesc}>· {healthPolicy.description}</span>
+                  </div>
+                  <div style={styles.healthFailureStats}>
+                    <span style={styles.healthStatBadge}>初始HP: {healthPolicy.initialHealth}</span>
+                    <span style={styles.healthStatBadge}>MISS扣血: -{healthPolicy.damage.miss}</span>
+                    <span style={styles.healthStatBadge}>GOOD扣血: -{healthPolicy.damage.good}</span>
+                    {healthPolicy.failThreshold > 0 && (
+                      <span style={styles.healthStatBadge}>危险线: {healthPolicy.failThreshold}%</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -540,6 +584,7 @@ export default function Result({
             breakdown={result.tierBreakdown}
             accuracy={result.accuracy}
             health={result.health}
+            healthPolicy={healthPolicy}
             showDetails={showDetails}
           />
         )}
@@ -1322,10 +1367,14 @@ function HistoryList({ entries, formatDate, getRankBadgeStyle }) {
   )
 }
 
-function TierGradeSection({ tier, breakdown, accuracy, health, showDetails }) {
+function TierGradeSection({ tier, breakdown, accuracy, health, healthPolicy = null, showDetails }) {
   const tierInfo = getTierInfo(tier)
   const tierIndex = TIER_GRADES.findIndex(t => t.id === tier)
   const nextTier = tierIndex > 0 ? TIER_GRADES[tierIndex - 1] : null
+  const effectiveMaxHealth = healthPolicy?.maxHealth || 100
+  const healthDisplayValue = healthPolicy
+    ? `${Math.round(health)} / ${effectiveMaxHealth}`
+    : `${Math.round(health)}%`
 
   return (
     <div style={{
@@ -1368,7 +1417,7 @@ function TierGradeSection({ tier, breakdown, accuracy, health, showDetails }) {
             label={breakdown.health.label}
             score={breakdown.health.score}
             max={breakdown.health.max}
-            displayValue={`${Math.round(health)}%`}
+            displayValue={healthDisplayValue}
             color="#ff3366"
           />
 
@@ -1938,6 +1987,66 @@ const styles = {
     fontSize: '11px',
     fontWeight: 600,
     letterSpacing: '1px'
+  },
+  healthPolicyBadge: {
+    display: 'inline-block',
+    padding: '6px 16px',
+    borderRadius: '20px',
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    border: '1px solid'
+  },
+  healthFailureSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    marginTop: '20px',
+    padding: '16px 20px',
+    background: 'linear-gradient(135deg, rgba(255,51,102,0.15), rgba(255,51,102,0.05))',
+    border: '1px solid rgba(255,51,102,0.3)',
+    borderRadius: '12px'
+  },
+  healthFailureIcon: {
+    fontSize: '32px',
+    flexShrink: 0
+  },
+  healthFailureContent: {
+    flex: 1
+  },
+  healthFailureTitle: {
+    fontSize: '14px',
+    fontWeight: 800,
+    color: '#ff3366',
+    letterSpacing: '2px',
+    marginBottom: '4px'
+  },
+  healthFailurePolicy: {
+    fontSize: '12px',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: '8px'
+  },
+  healthPolicyName: {
+    fontWeight: 700,
+    color: '#ff3366'
+  },
+  healthPolicyDesc: {
+    opacity: 0.8
+  },
+  healthFailureStats: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap'
+  },
+  healthStatBadge: {
+    padding: '4px 10px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    fontSize: '11px',
+    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'monospace',
+    fontWeight: 600
   },
   trackTitle: {
     fontSize: '30px',
