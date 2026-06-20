@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { TITLES, RANK_COLORS } from '../data/growthData.js'
 import { TRACK_PACKS, TRACKS, DIFFICULTIES, checkUnlockCondition, getTrackWithDifficulty } from '../data/tracks.js'
 
@@ -35,11 +35,68 @@ export default function TrackSelect({
   const [hoverIndex, setHoverIndex] = useState(-1)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [viewMode, setViewMode] = useState('list')
+  const [levelRange, setLevelRange] = useState({ min: 1, max: 20 })
+  const [bpmRange, setBpmRange] = useState({ min: 60, max: 240 })
+  const [noteCountRange, setNoteCountRange] = useState({ min: 0, max: 1000 })
+  const [clearStatus, setClearStatus] = useState('all')
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const canvasRef = useRef(null)
   const animRef = useRef(null)
   const timeRef = useRef(0)
 
   const currentTitle = TITLES.find(t => t.id === playerData.currentTitle)
+
+  const getTrackClearStatus = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 'none'
+    const diffRecords = track.difficulties.map(d => {
+      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
+      return { difficulty: d, cleared: rec?.cleared || false }
+    })
+    const clearedCount = diffRecords.filter(r => r.cleared).length
+    if (clearedCount === 0) return 'none'
+    if (clearedCount === track.difficulties.length) return 'all_cleared'
+    return 'partial'
+  }, [getBestRecord])
+
+  const getTrackHighestLevel = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 0
+    return Math.max(...track.difficulties.map(d => d.level))
+  }, [])
+
+  const getTrackLowestLevel = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 20
+    return Math.min(...track.difficulties.map(d => d.level))
+  }, [])
+
+  const getTrackMaxNotes = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 0
+    return Math.max(...track.difficulties.map(d => d.totalNotes || 0))
+  }, [])
+
+  const getTrackMinNotes = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 9999
+    return Math.min(...track.difficulties.map(d => d.totalNotes || 0))
+  }, [])
+
+  const getTrackBestScore = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 0
+    let maxScore = 0
+    track.difficulties.forEach(d => {
+      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
+      if (rec?.score > maxScore) maxScore = rec.score
+    })
+    return maxScore
+  }, [getBestRecord])
+
+  const getTrackBestAccuracy = useCallback((track) => {
+    if (!track.difficulties || track.difficulties.length === 0) return 0
+    let maxAcc = 0
+    track.difficulties.forEach(d => {
+      const rec = getBestRecord ? getBestRecord(track.id, d.id) : null
+      if (rec?.accuracy > maxAcc) maxAcc = rec.accuracy
+    })
+    return maxAcc
+  }, [getBestRecord])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -122,6 +179,24 @@ export default function TrackSelect({
       )
     }
 
+    result = result.filter(t => {
+      const minLvl = getTrackLowestLevel(t)
+      const maxLvl = getTrackHighestLevel(t)
+      return maxLvl >= levelRange.min && minLvl <= levelRange.max
+    })
+
+    result = result.filter(t => t.bpm >= bpmRange.min && t.bpm <= bpmRange.max)
+
+    result = result.filter(t => {
+      const minNotes = getTrackMinNotes(t)
+      const maxNotes = getTrackMaxNotes(t)
+      return maxNotes >= noteCountRange.min && minNotes <= noteCountRange.max
+    })
+
+    if (clearStatus !== 'all') {
+      result = result.filter(t => getTrackClearStatus(t) === clearStatus)
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(t =>
@@ -141,10 +216,10 @@ export default function TrackSelect({
 
     switch (sortBy) {
       case 'level_asc':
-        result.sort((a, b) => a.level - b.level)
+        result.sort((a, b) => getTrackLowestLevel(a) - getTrackLowestLevel(b))
         break
       case 'level_desc':
-        result.sort((a, b) => b.level - a.level)
+        result.sort((a, b) => getTrackHighestLevel(b) - getTrackHighestLevel(a))
         break
       case 'title':
         result.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
@@ -152,15 +227,47 @@ export default function TrackSelect({
       case 'artist':
         result.sort((a, b) => a.artist.localeCompare(b.artist, 'zh-CN'))
         break
-      case 'bpm':
+      case 'bpm_asc':
         result.sort((a, b) => a.bpm - b.bpm)
         break
+      case 'bpm_desc':
+        result.sort((a, b) => b.bpm - a.bpm)
+        break
+      case 'notes_asc':
+        result.sort((a, b) => getTrackMinNotes(a) - getTrackMinNotes(b))
+        break
+      case 'notes_desc':
+        result.sort((a, b) => getTrackMaxNotes(b) - getTrackMaxNotes(a))
+        break
+      case 'score_desc':
+        result.sort((a, b) => getTrackBestScore(b) - getTrackBestScore(a))
+        break
+      case 'accuracy_desc':
+        result.sort((a, b) => getTrackBestAccuracy(b) - getTrackBestAccuracy(a))
+        break
+      case 'clear_progress_desc': {
+        const getProgress = (t) => {
+          if (!t.difficulties) return 0
+          const cleared = t.difficulties.filter(d => {
+            const rec = getBestRecord ? getBestRecord(t.id, d.id) : null
+            return rec?.cleared
+          }).length
+          return cleared / t.difficulties.length
+        }
+        result.sort((a, b) => getProgress(b) - getProgress(a))
+        break
+      }
       default:
         break
     }
 
     return result
-  }, [tracks, selectedPackId, filterDifficulty, searchQuery, showOnlyUnlocked, sortBy, playerData, bestRecords])
+  }, [
+    tracks, selectedPackId, filterDifficulty, searchQuery, showOnlyUnlocked, sortBy,
+    playerData, bestRecords, levelRange, bpmRange, noteCountRange, clearStatus,
+    getTrackLowestLevel, getTrackHighestLevel, getTrackMinNotes, getTrackMaxNotes,
+    getTrackClearStatus, getTrackBestScore, getTrackBestAccuracy, getBestRecord
+  ])
 
   useEffect(() => {
     if (filteredTracks.length > 0 && selectedTrackIndex >= filteredTracks.length) {
@@ -480,9 +587,15 @@ export default function TrackSelect({
                   <option value="default">默认排序</option>
                   <option value="level_asc">难度 ↑</option>
                   <option value="level_desc">难度 ↓</option>
+                  <option value="bpm_asc">BPM ↑</option>
+                  <option value="bpm_desc">BPM ↓</option>
+                  <option value="notes_asc">音符数 ↑</option>
+                  <option value="notes_desc">音符数 ↓</option>
+                  <option value="score_desc">最高分 ↓</option>
+                  <option value="accuracy_desc">准确率 ↓</option>
+                  <option value="clear_progress_desc">通关进度 ↓</option>
                   <option value="title">曲目名</option>
                   <option value="artist">艺术家</option>
-                  <option value="bpm">BPM</option>
                 </select>
               </div>
 
@@ -495,7 +608,151 @@ export default function TrackSelect({
                 />
                 仅显示已解锁
               </label>
+
+              <button
+                style={{
+                  ...styles.advancedFilterBtn,
+                  ...(showAdvancedFilters ? styles.advancedFilterBtnActive : {})
+                }}
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              >
+                {showAdvancedFilters ? '▲' : '▼'} 高级筛选
+              </button>
             </div>
+
+            {showAdvancedFilters && (
+              <div style={styles.advancedFilters}>
+                <div style={styles.rangeFilterGroup}>
+                  <span style={styles.filterLabel}>等级范围:</span>
+                  <div style={styles.rangeControl}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={levelRange.min}
+                      onChange={(e) => setLevelRange(prev => ({ ...prev, min: Math.max(1, Math.min(prev.max, parseInt(e.target.value) || 1)) }))}
+                      style={styles.rangeInput}
+                    />
+                    <span style={styles.rangeSeparator}>~</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={levelRange.max}
+                      onChange={(e) => setLevelRange(prev => ({ ...prev, max: Math.min(20, Math.max(prev.min, parseInt(e.target.value) || 20)) }))}
+                      style={styles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.rangeFilterGroup}>
+                  <span style={styles.filterLabel}>BPM范围:</span>
+                  <div style={styles.rangeControl}>
+                    <input
+                      type="number"
+                      min="40"
+                      max="300"
+                      value={bpmRange.min}
+                      onChange={(e) => setBpmRange(prev => ({ ...prev, min: Math.max(40, Math.min(prev.max, parseInt(e.target.value) || 40)) }))}
+                      style={styles.rangeInput}
+                    />
+                    <span style={styles.rangeSeparator}>~</span>
+                    <input
+                      type="number"
+                      min="40"
+                      max="300"
+                      value={bpmRange.max}
+                      onChange={(e) => setBpmRange(prev => ({ ...prev, max: Math.min(300, Math.max(prev.min, parseInt(e.target.value) || 300)) }))}
+                      style={styles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.rangeFilterGroup}>
+                  <span style={styles.filterLabel}>音符数:</span>
+                  <div style={styles.rangeControl}>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2000"
+                      step="50"
+                      value={noteCountRange.min}
+                      onChange={(e) => setNoteCountRange(prev => ({ ...prev, min: Math.max(0, Math.min(prev.max, parseInt(e.target.value) || 0)) }))}
+                      style={styles.rangeInput}
+                    />
+                    <span style={styles.rangeSeparator}>~</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2000"
+                      step="50"
+                      value={noteCountRange.max}
+                      onChange={(e) => setNoteCountRange(prev => ({ ...prev, max: Math.min(2000, Math.max(prev.min, parseInt(e.target.value) || 2000)) }))}
+                      style={styles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.filterGroup}>
+                  <span style={styles.filterLabel}>通关状态:</span>
+                  <div style={styles.statusChips}>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(clearStatus === 'all' ? styles.statusChipActive : {})
+                      }}
+                      onClick={() => setClearStatus('all')}
+                    >
+                      全部
+                    </button>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(clearStatus === 'none' ? { ...styles.statusChipActive, borderColor: '#ff6666', color: '#ff6666' } : {})
+                      }}
+                      onClick={() => setClearStatus('none')}
+                    >
+                      未通关
+                    </button>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(clearStatus === 'partial' ? { ...styles.statusChipActive, borderColor: '#ffcc00', color: '#ffcc00' } : {})
+                      }}
+                      onClick={() => setClearStatus('partial')}
+                    >
+                      部分通关
+                    </button>
+                    <button
+                      style={{
+                        ...styles.statusChip,
+                        ...(clearStatus === 'all_cleared' ? { ...styles.statusChipActive, borderColor: '#66ff99', color: '#66ff99' } : {})
+                      }}
+                      onClick={() => setClearStatus('all_cleared')}
+                    >
+                      全部通关
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  style={styles.resetFiltersBtn}
+                  onClick={() => {
+                    setLevelRange({ min: 1, max: 20 })
+                    setBpmRange({ min: 60, max: 240 })
+                    setNoteCountRange({ min: 0, max: 1000 })
+                    setClearStatus('all')
+                    setFilterDifficulty('all')
+                    setSelectedPackId('all')
+                    setSearchQuery('')
+                    setShowOnlyUnlocked(false)
+                    setSortBy('default')
+                  }}
+                >
+                  ↺ 重置所有筛选
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={styles.tracksHeader}>
@@ -1174,6 +1431,89 @@ const styles = {
   },
   checkbox: {
     accentColor: '#ff3366'
+  },
+  advancedFilterBtn: {
+    padding: '6px 12px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 600,
+    transition: 'all 0.2s'
+  },
+  advancedFilterBtnActive: {
+    background: 'rgba(0,255,204,0.15)',
+    borderColor: 'rgba(0,255,204,0.4)',
+    color: '#00ffcc'
+  },
+  advancedFilters: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+    padding: '14px',
+    background: 'rgba(0,0,0,0.25)',
+    border: '1px solid rgba(0,255,204,0.15)',
+    borderRadius: '10px',
+    marginTop: '4px'
+  },
+  rangeFilterGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  rangeControl: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  },
+  rangeInput: {
+    width: '70px',
+    padding: '6px 8px',
+    background: 'rgba(0,0,0,0.4)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    color: '#fff',
+    fontSize: '12px',
+    outline: 'none',
+    textAlign: 'center'
+  },
+  rangeSeparator: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: '12px'
+  },
+  statusChips: {
+    display: 'flex',
+    gap: '6px'
+  },
+  statusChip: {
+    padding: '5px 10px',
+    background: 'rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    color: 'rgba(255,255,255,0.6)',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: 600,
+    transition: 'all 0.2s'
+  },
+  statusChipActive: {
+    background: 'rgba(255,51,102,0.15)',
+    borderColor: 'rgba(255,51,102,0.4)',
+    color: '#ff3366'
+  },
+  resetFiltersBtn: {
+    alignSelf: 'flex-start',
+    padding: '8px 16px',
+    background: 'rgba(255,51,102,0.1)',
+    border: '1px solid rgba(255,51,102,0.3)',
+    borderRadius: '8px',
+    color: '#ff6699',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: 600,
+    transition: 'all 0.2s'
   },
   tracksHeader: {
     display: 'flex',
